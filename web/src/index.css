@@ -92,24 +92,11 @@ a {
 }
 
 .brand-mark {
-  width: 44px;
-  height: 32px;
-  border-radius: 4px;
-  background: linear-gradient(160deg, transparent 49%, var(--paper-edge) 50%, transparent 52%), linear-gradient(20deg, transparent 49%, var(--paper-edge) 50%, transparent 52%), var(--paper);
-  position: relative;
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   flex: none;
-}
-
-.brand-mark::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 55%;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--wax);
-  transform: translate(-50%, -50%);
 }
 
 .brand-name {

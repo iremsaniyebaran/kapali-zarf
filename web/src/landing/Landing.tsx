@@ -78,7 +78,7 @@ export function Landing() {
     <div className="landing">
       <header className="l-nav">
         <a className="brand" href="/">
-          <span className="brand-mark" aria-hidden />
+          <img className="brand-mark" src="/logo.png" alt="" />
           <span className="brand-name">Kapalı Zarf</span>
         </a>
         <nav>

@@ -19,7 +19,7 @@ export function PriceBar({ price, from, dropPct, canDrop, dropping, mode, status
   return (
     <header className="price-bar">
       <a className="brand" href="/" title="Tanıtım sayfası">
-        <span className="brand-mark" aria-hidden />
+        <img className="brand-mark" src="/logo.png" alt="" />
         <div>
           <div className="brand-name">Kapalı Zarf</div>
           <div className="brand-sub">Likidasyonda en hızlı bot değil, en iyi teklif kazanır</div>
