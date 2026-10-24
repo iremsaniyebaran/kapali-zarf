@@ -279,7 +279,9 @@ async function checkHashEncoding() {
   if (onChain !== hashBid(id, 890n * ONE, salt, addr.botA)) fail("hashBid kontrattakiyle uyuşmuyor; botlar başlamadı.");
 }
 
-const secretsFile = (id) => path.join(STATE_DIR, `${id}.json`);
+// Auction ids are keccak(borrower, nonce): a fresh deploy starts the nonce at 0 again, so the same
+// id comes back. Salts are therefore kept per chain and per KapaliZarf address.
+const secretsFile = (id) => path.join(STATE_DIR, `${ctx.chainId}-${c.kz.address.toLowerCase()}-${id}.json`);
 function loadSecrets(id) {
   try {
     return JSON.parse(fs.readFileSync(secretsFile(id), "utf8"));
