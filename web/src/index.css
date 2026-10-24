@@ -43,12 +43,37 @@ a {
 
 .stage {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: clamp(10px, 1.2vw, 18px);
   min-height: 100vh;
   padding: clamp(12px, 1.4vw, 24px);
   max-width: 1800px;
   margin: 0 auto;
+}
+
+@media (min-width: 1100px) {
+  .stage {
+    height: 100vh;
+  }
+}
+
+/* ---------- Body: columns + control panel ---------- */
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(10px, 1.2vw, 18px);
+  min-height: 0;
+}
+
+.with-panel .body {
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 400px);
+}
+
+@media (max-width: 1100px) {
+  .with-panel .body {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------- Price bar ---------- */
@@ -184,6 +209,29 @@ a {
   box-shadow: 0 0 10px var(--gold);
 }
 
+.drop-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.panel-toggle {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.panel-toggle:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
 /* ---------- Columns ---------- */
 
 .columns {
@@ -191,6 +239,43 @@ a {
   grid-template-columns: 1fr 1.35fr;
   gap: clamp(12px, 1.6vw, 24px);
   min-height: 0;
+  position: relative;
+}
+
+.replay-banner {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: -15px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 3px 4px 3px 14px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #2a1f00;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 10px 30px rgba(242, 193, 78, 0.35);
+  white-space: nowrap;
+}
+
+.replay-banner .muted {
+  color: #5c4710;
+}
+
+.replay-banner .ghost-button {
+  color: #2a1f00;
+  border-color: rgba(42, 31, 0, 0.35);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+
+/* The replayed round is framed in gold so nobody mistakes it for a live one. */
+.replaying .column {
+  border-color: rgba(242, 193, 78, 0.55);
 }
 
 .column {
@@ -511,18 +596,20 @@ a {
 
 .envelopes {
   display: flex;
-  gap: clamp(10px, 1.4vw, 22px);
-  flex-wrap: wrap;
+  gap: clamp(8px, 1vw, 18px);
   min-height: 120px;
   align-items: flex-start;
 }
 
+/* Up to four bidders (three bots and "Sen") share one row. */
 .envelope {
   position: relative;
   display: grid;
   justify-items: center;
   gap: 6px;
-  width: clamp(100px, 8.5vw, 150px);
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 150px;
 }
 
 .envelope-who {
@@ -585,7 +672,7 @@ a {
   background: #fffaf0;
   color: #1b1f27;
   border: 1px solid var(--paper-edge);
-  font-size: clamp(22px, 2.2vw, 34px);
+  font-size: clamp(18px, 1.8vw, 30px);
   font-weight: 800;
 }
 

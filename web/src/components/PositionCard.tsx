@@ -2,6 +2,7 @@ import { forwardRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { healthOf, valueOf, type Position } from '../stage'
 import { num, usd } from '../format'
+import { Term } from './Term'
 
 interface Props {
   title: string
@@ -44,7 +45,7 @@ export const PositionCard = forwardRef<HTMLDivElement, Props>(function PositionC
           </dl>
           <div className="health">
             <div className="health-label">
-              Sağlık oranı <strong>{Number.isFinite(hf) ? hf.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</strong>
+              <Term k="health">Sağlık oranı</Term> <strong>{Number.isFinite(hf) ? hf.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</strong>
             </div>
             <div className="health-track">
               <motion.div className="health-fill" animate={{ width: `${fill * 100}%` }} transition={{ duration: 0.6 }} />

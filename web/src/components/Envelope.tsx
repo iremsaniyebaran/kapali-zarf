@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import type { Bid } from '../stage'
-import { nameOf } from '../config'
+import { GUEST, nameOf } from '../config'
 import { txUrl, usd } from '../format'
 
 interface Props {
@@ -13,7 +13,14 @@ interface Props {
 
 /** A sealed envelope: the amount stays hidden until BidRevealed, then the card flips open. */
 export function Envelope({ bid, index, winner, priceSetter, settled }: Props) {
-  const cls = ['envelope', bid.revealed ? 'envelope-open' : 'envelope-sealed', winner ? 'envelope-winner' : '', settled && !winner ? 'envelope-lost' : '']
+  const guest = bid.bidder.toLowerCase() === GUEST.toLowerCase()
+  const cls = [
+    'envelope',
+    bid.revealed ? 'envelope-open' : 'envelope-sealed',
+    winner ? 'envelope-winner' : '',
+    settled && !winner ? 'envelope-lost' : '',
+    guest ? 'envelope-guest' : '',
+  ]
   return (
     <motion.div
       className={cls.join(' ')}

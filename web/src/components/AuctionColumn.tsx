@@ -5,6 +5,7 @@ import { nameOf } from '../config'
 import { seconds, txUrl, usd } from '../format'
 import { Envelope } from './Envelope'
 import { Seal } from './Seal'
+import { Term } from './Term'
 
 type Props = Pick<StageState, 'auction' | 'head' | 'drop'>
 
@@ -40,12 +41,16 @@ export const AuctionColumn = forwardRef<HTMLDivElement, Props>(function AuctionC
   return (
     <div className="column-body">
       <div className="auction-rules">
-        <span>Taban <strong>{usd(auction.reservePrice)}</strong> <span className="muted">= klasik fiyat</span></span>
-        <span>Tavan <strong>{usd(auction.value)}</strong></span>
+        <span>
+          <Term k="reserve">Taban</Term> <strong>{usd(auction.reservePrice)}</strong> <span className="muted">= klasik fiyat</span>
+        </span>
+        <span>
+          <Term k="cap">Tavan</Term> <strong>{usd(auction.value)}</strong>
+        </span>
       </div>
 
       {phase !== 'done' && <div className={`phase phase-${phase}`}>
-        <span className="phase-name">{PHASE_TEXT[phase]}</span>
+        <span className="phase-name">{phase === 'commit' ? <Term k="sealed">{PHASE_TEXT[phase]}</Term> : PHASE_TEXT[phase]}</span>
         {(phase === 'commit' || phase === 'reveal') && (
           <span className="phase-count">
             {left > 0n ? `${left} blok` : 'son blok'} <span className="muted">{seconds(left > 0n ? left : 0n)}</span>
@@ -89,7 +94,7 @@ export const AuctionColumn = forwardRef<HTMLDivElement, Props>(function AuctionC
                   Kazanan <strong>{nameOf(result.winner)}</strong>
                 </div>
                 <div className="result-line">
-                  Ödenen: <strong>ikinci teklif {usd(result.price)}</strong>
+                  Ödenen: <strong><Term k="second">ikinci teklif</Term> {usd(result.price)}</strong>
                   {second === undefined && <span className="muted"> (tek teklif: taban)</span>}
                 </div>
               </>

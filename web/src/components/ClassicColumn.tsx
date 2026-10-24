@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { StageState } from '../stage'
 import { nameOf } from '../config'
 import { txUrl, usd } from '../format'
+import { Term } from './Term'
 
 export function ClassicColumn({ classic, drop }: Pick<StageState, 'classic' | 'drop'>) {
   const blocks = classic && drop ? classic.block - drop.block : undefined
@@ -19,7 +20,7 @@ export function ClassicColumn({ classic, drop }: Pick<StageState, 'classic' | 'd
               {blocks !== undefined && blocks >= 0n ? ` ${blocks === 0n ? 'aynı blokta' : `${blocks} blokta`} aldı` : ' aldı'}
             </div>
             <div className="classic-paid">
-              Ödenen <strong>{usd(classic.price)}</strong> <span className="muted">sabit fiyat: değerin %90’ı</span>
+              Ödenen <strong>{usd(classic.price)}</strong> <span className="muted"><Term k="classic">sabit fiyat</Term>: değerin %90’ı</span>
             </div>
             {classic.tx && (
               <a className="tx-link" href={txUrl(classic.tx)} target="_blank" rel="noreferrer">
