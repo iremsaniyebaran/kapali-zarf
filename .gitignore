@@ -24,3 +24,6 @@ node_modules/
 
 # Local Anvil deployments
 shared/addresses.31337.json
+
+# Bot secrets (salts) per auction
+bots/state/
