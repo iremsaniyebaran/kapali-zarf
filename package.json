@@ -7,7 +7,8 @@
   "scripts": {
     "test": "forge test -vv",
     "wallets": "node bots/wallets.mjs",
-    "deploy": "forge script script/Deploy.s.sol --rpc-url monad_testnet --broadcast",
+    "deploy": "forge script script/Deploy.s.sol --rpc-url monad_testnet --broadcast && node bots/export-abi.mjs",
+    "abi": "forge build && node bots/export-abi.mjs",
     "reset": "node bots/reset.mjs",
     "bots": "node bots/run.mjs",
     "drop": "node bots/drop.mjs"
