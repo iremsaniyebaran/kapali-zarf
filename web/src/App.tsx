@@ -220,9 +220,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [drop, reset, chain, backToLive])
 
+  // Recording mode shows no status line, so it never appears on a recorded or projected stage.
   const status =
     mode === 'mock'
-      ? 'kayıt modu (mock)'
+      ? ''
       : !botsUp
         ? 'bot süreci kapalı'
         : chain.connected

@@ -48,10 +48,12 @@ export function PriceBar({ price, from, dropPct, canDrop, dropping, mode, status
           {dropping ? 'Gönderiliyor…' : `ETH %${dropPct} düştü`}
         </button>
         <div className="drop-meta">
-          <div className={`status status-${mode}`}>
-            <span className="status-dot" aria-hidden />
-            {status}
-          </div>
+          {status && (
+            <div className={`status status-${mode}`}>
+              <span className="status-dot" aria-hidden />
+              {status}
+            </div>
+          )}
           <button className="panel-toggle" onClick={onTogglePanel} aria-expanded={panelOpen} title="Kontrol paneli (P)">
             {panelOpen ? 'Paneli gizle ⟩' : '⟨ Kontrol paneli'}
           </button>
