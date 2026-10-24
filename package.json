@@ -11,7 +11,8 @@
     "abi": "forge build && node bots/export-abi.mjs",
     "reset": "node bots/reset.mjs",
     "bots": "node bots/bots.mjs",
-    "drop": "node bots/drop.mjs"
+    "drop": "node bots/drop.mjs",
+    "web": "npm --prefix web run dev"
   },
   "license": "MIT",
   "dependencies": {
