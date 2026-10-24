@@ -30,8 +30,9 @@ export const RPC_URL: string = env.VITE_RPC_URL ?? (CHAIN_ID === 31337 ? 'http:/
 export const WSS_URL: string = env.VITE_WSS_URL ?? RPC_URL.replace(/^http/, 'ws')
 export const DROP_URL: string = env.VITE_DROP_URL ?? 'http://localhost:8787'
 export const EXPLORER_TX_URL: string = env.VITE_EXPLORER_TX_URL ?? 'https://testnet.monadvision.com/tx/'
-/** Monad's block time. Elapsed time is computed from block counts, not timestamps. */
-export const BLOCK_SECONDS = 0.4
+/** Block time measured on Monad testnet (Oct 24, 2026): 17 blocks in 5.3 s and 10 blocks in 3.1 s.
+ * Elapsed time is computed from block counts, not timestamps. */
+export const BLOCK_SECONDS = Number(env.VITE_BLOCK_SECONDS ?? 0.31)
 
 const files = import.meta.glob<Addresses>('../../shared/addresses*.json', { eager: true, import: 'default' })
 const file = CHAIN_ID === 10143 ? '../../shared/addresses.json' : `../../shared/addresses.${CHAIN_ID}.json`

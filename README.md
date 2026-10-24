@@ -117,10 +117,10 @@ npm run web          # http://localhost:5173
 | `/?chain=31337` | Anvil'e karşı canlı mod |
 
 `web/.env.local` ile: `VITE_RPC_URL`, `VITE_WSS_URL` (botlardan farklı bir uç), `VITE_DROP_URL`
-(varsayılan `http://localhost:8787`), `VITE_EXPLORER_TX_URL`, `VITE_CHAIN_ID`.
+(varsayılan `http://localhost:8787`), `VITE_EXPLORER_TX_URL`, `VITE_CHAIN_ID`, `VITE_BLOCK_SECONDS`.
 
 Ekrandaki her rakam event'ten gelir: fark = `AuctionSettled.refund − ClassicLiquidated.refund`, süre =
-blok farkı × 0,4 sn. Aynı bloka düşen event'ler 350 ms arayla oynatılır. Sayfa yenilenirse son 300
+blok farkı × 0,31 sn (testnet'te ölçülen blok süresi; `VITE_BLOCK_SECONDS` ile değişir). Aynı bloka düşen event'ler 350 ms arayla oynatılır. Sayfa yenilenirse son 300
 bloğun logları ve `positionOf` okumalarıyla durum geri gelir.
 
 Tuşlar: `Boşluk` fiyat düşüşü, `R` reset, `K` son canlı turu `recorded.json` olarak indirir. Bu dosya

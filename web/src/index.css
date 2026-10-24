@@ -46,7 +46,7 @@ a {
   grid-template-rows: auto 1fr auto;
   gap: clamp(10px, 1.2vw, 18px);
   min-height: 100vh;
-  padding: clamp(12px, 2vw, 32px);
+  padding: clamp(12px, 1.4vw, 24px);
   max-width: 1800px;
   margin: 0 auto;
 }
@@ -650,11 +650,11 @@ a {
   justify-content: space-between;
   gap: 20px;
   flex-wrap: wrap;
-  padding: 10px 22px;
+  padding: 6px 22px;
   border-radius: var(--radius);
   background: var(--panel);
   border: 1px solid var(--line);
-  min-height: 72px;
+  min-height: 64px;
 }
 
 .diff > div {
