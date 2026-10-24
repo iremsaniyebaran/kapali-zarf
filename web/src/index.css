@@ -93,9 +93,8 @@ a {
 
 .brand-mark {
   display: block;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  height: 40px;
+  width: auto;
   flex: none;
 }
 
