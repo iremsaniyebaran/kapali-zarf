@@ -326,6 +326,47 @@ a.brand {
   margin: 10px 0 0;
 }
 
+/* The idea's history above the three steps: 1961, 1996, thirty years on paper, today. */
+.story {
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.story-item {
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.story-item.is-now {
+  border-color: rgba(61, 220, 151, 0.5);
+  background: linear-gradient(var(--good-soft), var(--good-soft)), var(--panel);
+}
+
+.story-when {
+  display: block;
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: -0.02em;
+}
+
+.story-item.is-now .story-when {
+  color: var(--good);
+}
+
+.story-what {
+  display: block;
+  margin-top: 6px;
+  color: #c3ccd8;
+  line-height: 1.5;
+}
+
 .steps {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -561,6 +602,13 @@ a.brand {
   border: 1px solid var(--line);
 }
 
+.l-final-logo {
+  display: block;
+  height: 64px;
+  width: auto;
+  margin: 0 auto 18px;
+}
+
 .l-final h2 {
   margin: 0 0 10px;
   font-size: clamp(26px, 3vw, 40px);
@@ -605,6 +653,10 @@ a.brand {
   .why,
   .wins {
     grid-template-columns: 1fr;
+  }
+
+  .story {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .hero {

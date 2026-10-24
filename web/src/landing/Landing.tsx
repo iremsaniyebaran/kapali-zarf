@@ -97,7 +97,7 @@ export function Landing() {
       <section className="hero">
         <div className="hero-copy">
           <motion.div className="l-pill" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            Monad Blitz Ankara · Monad testnet’te canlı
+            1996 Nobel’li bir fikir · Monad testnet’te canlı
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
             Likidasyonda en hızlı bot değil, <span className="hl">en iyi teklif</span> kazanır.
@@ -165,6 +165,19 @@ export function Landing() {
       </Section>
 
       <Section id="nasil" kicker="Nasıl çalışır" title="Üç adım, birkaç saniye">
+        <ol className="story" aria-label="Fikrin hikâyesi">
+          {[
+            ['1961', 'Vickrey ikinci fiyat açık artırmasını yayımlar'],
+            ['1996', 'Bu fikirle Nobel Ekonomi Ödülü’nü alır'],
+            ['30 yıl', 'Çoğunlukla kâğıtta kalır: zarfları açan kişiye güvenmek gerekir'],
+            ['Bugün', 'Zarfları kod açıyor; Monad’da bütün tur ≈ 3 sn'],
+          ].map(([when, what], i, all) => (
+            <li key={when} className={`story-item ${i === all.length - 1 ? 'is-now' : ''}`}>
+              <span className="story-when">{when}</span>
+              <span className="story-what">{what}</span>
+            </li>
+          ))}
+        </ol>
         <div className="steps">
           {[
             ['1', 'Mühürle', 'Her bot teklifinin hash’ini zincire yazar ve aynı tutarı (tavan fiyatı) kilitler. Ne tutar ne kilit, teklifi ele verir.'],
@@ -197,8 +210,8 @@ export function Landing() {
             <p>Monad testnet’te ölçülen blok süresi. 4 blokluk teklif penceresi ≈ 1,2 sn; teklif, açıklama ve sonuç birlikte ≈ 3 sn.</p>
           </div>
           <div className="why-card">
-            <div className="why-num">≥ 24 sn</div>
-            <p>Ethereum’da aynı iki pencere için alt sınır. Fiyat o sürede yeniden oynar; kapalı zarf likidasyonu pratikte kullanılamaz.</p>
+            <div className="why-num">≈ 2 dk</div>
+            <p>Aynı 10 blokluk tur, Ethereum’un 12 saniyelik bloklarıyla. Fiyat o sürede yeniden oynar; kapalı zarf likidasyonu pratikte kullanılamaz.</p>
           </div>
           <div className="why-card">
             <div className="why-num">+1 blok</div>
@@ -244,8 +257,9 @@ export function Landing() {
       )}
 
       <motion.section className="l-final" {...reveal}>
-        <h2>Fiyatı düşür, iki likidasyonu yan yana izle.</h2>
-        <p>Sahne sayfası botları canlı yönetir: düşüşü seç, stratejileri değiştir, kendi mühürlü teklifini ver.</p>
+        <img className="l-final-logo" src="/logo.png" alt="Kapalı Zarf" />
+        <h2>Likidasyonda kaybedilen para bota değil, borçluya döner.</h2>
+        <p>Vickrey’nin fikri otuz yıl bekledi; Monad’da üç saniyede çalışıyor.</p>
         <div className="hero-ctas">
           <a className="btn-primary" href="/demo">
             Canlı demoyu aç →
