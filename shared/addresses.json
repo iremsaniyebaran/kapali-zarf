@@ -6,15 +6,15 @@
     "fast": "0x3034C9ABf3bE07e9B3f6ec8f262288aBBbBB3861"
   },
   "chainId": 10143,
-  "commitBlocks": 8,
-  "deployBlock": 73785157,
+  "commitBlocks": 4,
+  "deployBlock": 73786456,
   "elifKlasik": "0x66EBff56616CD7E3ACcD4bf6467bA280BA33819F",
   "elifZarf": "0xe1839f5e26955A7C08A826268C5f03a7a69DDFea",
-  "oracle": "0x1b0e5a7483bbB51350ACB80A238d10b61cA82CBf",
+  "oracle": "0xcc3a537f30f65ee36D14c4f7e376612448C99d19",
   "owner": "0xfB726edEe75186b9c9fE49f14BF6BB0dc14eD587",
-  "pool": "0xa60845b94ACba84f1d062c8C23f4D44663915e77",
-  "revealBlocks": 8,
-  "usd": "0x55422dA63e08c44a4fdf8942228dd760a7bEDFC2",
-  "weth": "0x2BA771eA9d8186AC79a517628c04a45228d3ba0C",
-  "zarf": "0xc3AB42924389F418D9ebB40D57Ae8973c1ff4B47"
+  "pool": "0x09F2136e0412562F68f96E06788de495B03fbEAF",
+  "revealBlocks": 4,
+  "usd": "0xcb9A73420F9ACb5076CEd388857E2F8A91a5CCcF",
+  "weth": "0x74D7F8e46549b5C8Fe24119B282B6eEA1fde4CEC",
+  "zarf": "0xCf1a33B4f4A0726acF4686b7D00E707845D9e68F"
 }
