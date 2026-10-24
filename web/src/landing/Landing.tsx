@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { ADDRESSES, EXPLORER_TX_URL } from '../config'
 import { TryVickrey } from './TryVickrey'
+import { Medal, NobelBadge } from './Nobel'
 
 const REPO_URL = 'https://github.com/iremsaniyebaran/kapali-zarf'
 const EXPLORER_ADDRESS_URL = EXPLORER_TX_URL.replace(/\/tx\/?$/, '/address/')
@@ -133,7 +134,10 @@ export function Landing() {
           </motion.dl>
           <p className="hero-footnote">Rakamlar Monad testnet’te ölçülen bir turdan: 24 Ekim 2026, 4 + 4 blok pencere.</p>
         </div>
-        <HeroEnvelopes />
+        <div className="hero-visual">
+          <NobelBadge />
+          <HeroEnvelopes />
+        </div>
       </section>
 
       <Section kicker="Sorun" title="Aynı borç, aynı fiyat düşüşü, iki farklı son">
@@ -172,8 +176,11 @@ export function Landing() {
             ['30 yıl', 'Çoğunlukla kâğıtta kalır: zarfları açan kişiye güvenmek gerekir'],
             ['Bugün', 'Zarfları kod açıyor; Monad’da bütün tur ≈ 3 sn'],
           ].map(([when, what], i, all) => (
-            <li key={when} className={`story-item ${i === all.length - 1 ? 'is-now' : ''}`}>
-              <span className="story-when">{when}</span>
+            <li key={when} className={`story-item ${i === all.length - 1 ? 'is-now' : ''} ${when === '1996' ? 'is-nobel' : ''}`}>
+              <span className="story-when">
+                {when === '1996' && <Medal size={24} shine={false} />}
+                {when}
+              </span>
               <span className="story-what">{what}</span>
             </li>
           ))}
@@ -273,6 +280,7 @@ export function Landing() {
       <footer className="l-footer">
         <span>Kapalı Zarf · Monad Blitz Ankara v4</span>
         <span className="muted">Testnet demosu: Mock token’lar, gerçek para yok.</span>
+        <span className="muted">Nobel madalyası görseli Nobel Vakfı’nın tescilli tasarımıdır; Kapalı Zarf’ın Nobel Vakfı ile bir bağlantısı yoktur.</span>
       </footer>
     </div>
   )

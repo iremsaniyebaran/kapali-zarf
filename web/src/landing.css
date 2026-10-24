@@ -160,6 +160,79 @@ a.brand {
   color: var(--muted);
 }
 
+.hero-visual {
+  display: grid;
+  gap: 32px;
+}
+
+.hero-visual .nobel-badge {
+  justify-self: center;
+}
+
+/* Nobel card above the envelopes: the medal, the prize, the idea. */
+.nobel-badge {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px 12px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(242, 193, 78, 0.45);
+  background: radial-gradient(260px 120px at 18% 50%, rgba(242, 193, 78, 0.18), transparent 70%), var(--panel);
+  box-shadow: 0 0 48px rgba(242, 193, 78, 0.14);
+}
+
+.nobel-kicker {
+  color: var(--gold);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nobel-name {
+  margin-top: 2px;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.nobel-idea {
+  margin-top: 4px;
+  color: #c3ccd8;
+}
+
+.medal {
+  display: block;
+  flex: none;
+  filter: drop-shadow(0 8px 18px rgba(242, 193, 78, 0.25));
+}
+
+.medal-photo {
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.medal-shine {
+  animation: medal-shine 3.6s ease-in-out 1.4s infinite;
+}
+
+@keyframes medal-shine {
+  0%,
+  55% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(170px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .medal-shine {
+    animation: none;
+    display: none;
+  }
+}
+
 .hero-envelopes {
   display: flex;
   justify-content: center;
@@ -348,8 +421,15 @@ a.brand {
   background: linear-gradient(var(--good-soft), var(--good-soft)), var(--panel);
 }
 
+.story-item.is-nobel {
+  border-color: rgba(242, 193, 78, 0.55);
+  background: linear-gradient(rgba(242, 193, 78, 0.08), rgba(242, 193, 78, 0.08)), var(--panel);
+}
+
 .story-when {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 22px;
   font-weight: 900;
   color: var(--gold);
