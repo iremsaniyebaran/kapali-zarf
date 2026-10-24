@@ -1,264 +1,283 @@
 # Kapalı Zarf
 
-**Likidasyonda en hızlı bot değil, en iyi teklif kazanır.**
+**In a liquidation, the best bid should win, not the fastest bot.**
 
-Kapalı Zarf, borç protokolleri için bir likidasyon modülü. Likide edilecek teminatı ilk gelen bota
-sabit indirimle satmak yerine birkaç bloğluk **mühürlü, ikinci fiyat (Vickrey) açık artırmasına**
-sokuyor. Kazanan ikinci en yüksek teklifi öder; borç kapanır, üstündeki her dolar borçluya döner.
-Monad testnet'te canlı çalışıyor: bütün tur yaklaşık **3 saniye**.
+Kapalı Zarf ("sealed envelope" in Turkish) is a liquidation module for lending protocols. Instead
+of selling a liquidatable position's collateral to the first bot at a fixed discount, it runs a
+**sealed-bid, second-price (Vickrey) auction** over a few blocks. The winner pays the second-highest
+bid; the debt is repaid and every dollar above it goes back to the borrower. It runs live on Monad
+testnet, and a full round takes about **3 seconds**.
 
-Monad Blitz Ankara v4 · 24 Ekim 2026
+Monad Blitz Ankara v4 · October 24, 2026
 
 | | |
 | --- | --- |
-| **Canlı site** | https://kapali-zarf.vercel.app |
-| **Sahne (demo)** | https://kapali-zarf.vercel.app/demo |
-| **Kayıt modu (zincirsiz yedek)** | https://kapali-zarf.vercel.app/demo?mock=1 |
-| **Ağ** | Monad testnet, chain ID 10143 |
-| **Ana kontrat** | [`KapaliZarf` 0xCf1a33B4…5D9e68F](https://testnet.monadvision.com/address/0xCf1a33B4f4A0726acF4686b7D00E707845D9e68F) |
+| **Live site** | https://kapali-zarf.vercel.app |
+| **Stage (demo)** | https://kapali-zarf.vercel.app/demo |
+| **Replay mode (no chain needed)** | https://kapali-zarf.vercel.app/demo?mock=1 |
+| **Network** | Monad testnet, chain ID 10143 |
+| **Main contract** | [`KapaliZarf` 0xCf1a33B4…5D9e68F](https://testnet.monadvision.com/address/0xCf1a33B4f4A0726acF4686b7D00E707845D9e68F) |
+
+The interface is in Turkish. Elif is the borrower in every example.
 
 ---
 
-## İçindekiler
+## Contents
 
-1. [30 saniyede](#30-saniyede)
-2. [Jüri için: kriterlerin kanıtı](#jüri-için-kriterlerin-kanıtı)
-3. [Sorun](#sorun)
-4. [Çözüm: mühürlü ikinci fiyat](#çözüm-mühürlü-ikinci-fiyat)
-5. [Neden zincir, neden Monad](#neden-zincir-neden-monad)
-6. [Testnet'te ölçülen sonuçlar](#testnette-ölçülen-sonuçlar)
-7. [Demo nasıl izlenir ve denenir](#demo-nasıl-izlenir-ve-denenir)
-8. [Neler gerçek, neler demo için basitleştirildi](#neler-gerçek-neler-demo-için-basitleştirildi)
-9. [Mimari](#mimari)
-10. [Deploy edilen kontratlar](#deploy-edilen-kontratlar)
-11. [Testler ve CI](#testler-ve-ci)
-12. [Kurulum ve çalıştırma](#kurulum-ve-çalıştırma)
-13. [Sınırlamalar ve sonraki adımlar](#sınırlamalar-ve-sonraki-adımlar)
-14. [Blitz sırasında yapılanlar](#blitz-sırasında-yapılanlar)
-15. [Ekip](#ekip)
+1. [In 30 seconds](#in-30-seconds)
+2. [For the judges: evidence per criterion](#for-the-judges-evidence-per-criterion)
+3. [The problem](#the-problem)
+4. [The solution: a sealed second-price auction](#the-solution-a-sealed-second-price-auction)
+5. [Why on-chain, why Monad](#why-on-chain-why-monad)
+6. [Results measured on testnet](#results-measured-on-testnet)
+7. [How to watch and play the demo](#how-to-watch-and-play-the-demo)
+8. [What is real and what is simplified for the demo](#what-is-real-and-what-is-simplified-for-the-demo)
+9. [Architecture](#architecture)
+10. [Deployed contracts](#deployed-contracts)
+11. [Tests and CI](#tests-and-ci)
+12. [Setup and running](#setup-and-running)
+13. [Limitations and next steps](#limitations-and-next-steps)
+14. [Built during the Blitz](#built-during-the-blitz)
+15. [Team](#team)
 
 ---
 
-## 30 saniyede
+## In 30 seconds
 
-- **Sorun:** Bugün bir pozisyon likide olduğunda teminatı ilk gelen bot değerinin %90'ına alır.
-  Aradaki %10 hıza ödenen ödül olarak botta kalır; borçlu neredeyse hiçbir şey geri almaz.
-- **Çözüm:** Teminat birkaç bloğluk kapalı zarf açık artırmasına girer. Botlar teklifini mühürler,
-  sonra açar; en yüksek teklif kazanır ama ikinci en yüksek teklifi öder. Taban fiyat bugünkü klasik
-  fiyata eşit, yani borçlu hiçbir zaman bugünkünden az almaz.
-- **Sonuç (Monad testnet'te ölçüldü):** 1 ETH teminat, 800 $ borç, ETH 1000 → 900 $.
+- **Problem:** When a position becomes liquidatable today, the first bot to arrive buys the
+  collateral at 90% of its value. The 10% discount stays with the bot as a reward for speed; the
+  borrower gets almost nothing back.
+- **Solution:** The collateral goes into a sealed-bid auction lasting a few blocks. Bots seal their
+  bids, then reveal them; the highest bid wins but pays the second-highest. The reserve price equals
+  today's classic liquidation price, so the borrower never gets less than today.
+- **Result (measured on Monad testnet):** 1 ETH collateral, 800 $ debt, ETH falls from 1000 to 900 $.
 
-| | Klasik likidasyon | Kapalı Zarf |
+| | Classic liquidation | Kapalı Zarf |
 | --- | --- | --- |
-| Teminatı alan | En hızlı bot, 1 blokta | En yüksek teklif (890), ikinci fiyatı öder |
-| Ödenen | 810 $ | 885 $ |
-| **Borçluya dönen** | **10 $** | **85 $** |
-| Süre | 1 blok | 10 blok, ≈ 3,1 sn |
+| Who takes the collateral | The fastest bot, in 1 block | The highest bid (890), paying the second price |
+| Price paid | 810 $ | 885 $ |
+| **Returned to the borrower** | **10 $** | **85 $** |
+| Time | 1 block | 10 blocks, ≈ 3.1 s |
 
 ---
 
-## Jüri için: kriterlerin kanıtı
+## For the judges: evidence per criterion
 
-| Kriter | Nerede görülür |
+| Criterion | Where to see it |
 | --- | --- |
-| **Etkinlikte yapıldı** | Bütün kod 24 Ekim'de yazıldı; etkinlikten önce hazırlanmış kod yok. Commit geçmişi 12:11'den başlıyor, ayrıntı [Blitz sırasında yapılanlar](#blitz-sırasında-yapılanlar)'da. |
-| **Monad'da deploy** | Beş kontrat Monad testnet'te, adresler [aşağıda](#deploy-edilen-kontratlar) ve [`shared/addresses.json`](shared/addresses.json)'da. Deploy kaydı: [`broadcast/Deploy.s.sol/10143/`](broadcast/Deploy.s.sol/10143). |
-| **Dürüst pitch** | Ana iddia ("borçluya 10 $ yerine 85 $, ≈ 3 sn") testnet'teki gerçek işlemlerle doğrulanabilir: [ölçülen tur](#testnette-ölçülen-sonuçlar). Demo için basitleştirilen her şey [burada](#neler-gerçek-neler-demo-için-basitleştirildi) yazıyor. |
-| **Execution** | Kontratlar, botlar ve sahne sayfası testnet'te uçtan uca çalışıyor; 39 Foundry testi (fuzz dahil) ve GitHub Actions CI. |
-| **On-chain gereklilik · Monad uyumu** | Zincir burada ödeme kanalı değil, mekanizmanın kendisi: mühür, kilit, açma ve ikinci fiyat zincirde doğrulanır. Kapalı zarf ancak kısa bloklarla kullanılabilir: Ethereum'da ≥ 24 sn, Monad'da ≈ 3 sn. [Ayrıntı](#neden-zincir-neden-monad). |
-| **Problem ve vaat** | Net kullanıcı: borç alan kişi ve borç protokolü. Monad'daki herhangi bir borç protokolüne takılabilecek bir modül olarak tasarlandı. |
-| **Özgünlük** | 1961'de yayımlanan, 1996'da Nobel alan Vickrey açık artırması 30 yıl çoğunlukla kâğıtta kaldı: zarfları açan kişiye güvenmek gerekiyordu. Burada zarfları kod açıyor ve tur bir bloğun birkaç katında bitiyor. |
+| **Built at the event** | All code was written on October 24; nothing was prepared before the event. The commit history starts at 12:11; see [Built during the Blitz](#built-during-the-blitz). |
+| **Deployed on Monad** | Five contracts on Monad testnet, listed [below](#deployed-contracts) and in [`shared/addresses.json`](shared/addresses.json). Deploy record: [`broadcast/Deploy.s.sol/10143/`](broadcast/Deploy.s.sol/10143). |
+| **Honest pitch** | The headline claim ("85 $ instead of 10 $ back to the borrower, in ≈ 3 s") can be checked against real testnet transactions: [measured round](#results-measured-on-testnet). Everything simplified for the demo is listed [here](#what-is-real-and-what-is-simplified-for-the-demo). |
+| **Execution** | Contracts, bots and the stage page work end to end on testnet; 39 Foundry tests (including fuzzing) and GitHub Actions CI. |
+| **On-chain necessity · Monad fit** | The chain is the mechanism here, not a payment rail: sealing, locking, revealing and the second price are all enforced on-chain. A sealed-bid auction is only usable with short blocks: ≥ 24 s on Ethereum, ≈ 3 s on Monad. [Details](#why-on-chain-why-monad). |
+| **Problem & promise** | A clear user: the borrower and the lending protocol. Designed as a module that can plug into any lending protocol on Monad. |
+| **Originality** | The Vickrey auction, published in 1961 and awarded the Nobel Prize in Economics in 1996, stayed mostly on paper for 30 years: someone had to be trusted to open the envelopes. Here code opens them, and the round ends within a few blocks. |
 
 ---
 
-## Sorun
+## The problem
 
-Borç protokollerinde (Aave, Compound benzeri) teminat değeri borcun belli bir oranının altına düşünce
-pozisyon likide edilebilir hale gelir. Bugünkü model:
+In lending protocols (Aave- or Compound-style), a position becomes liquidatable once its collateral
+value falls below a set ratio of its debt. Today's model:
 
-1. Fiyat düşer, likidasyon botları aynı bloğa girmek için yarışır.
-2. **En hızlısı** teminatın tamamını sabit indirimle alır (bizim örnekte değerin %90'ı).
-3. Borç kapanır, kalan küçük fark borçluya döner.
+1. The price falls and liquidation bots race to get into the same block.
+2. **The fastest one** buys all of the collateral at a fixed discount (90% of value in our example).
+3. The debt is repaid and the small remainder goes back to the borrower.
 
-Örnekte Elif 1 ETH teminatla 800 $ borç almış. ETH 1000 $'dan 900 $'a düşüyor:
+In the example, Elif borrowed 800 $ against 1 ETH of collateral. ETH falls from 1000 $ to 900 $:
 
-- Hızlı bot 900 $ değerindeki teminatı **810 $**'a alır.
-- 800 $ borç kapanır, Elif'e **10 $** döner.
-- **90 $**'lık indirim, rekabet fiyatla değil hızla yapıldığı için botta kalır.
+- The fast bot buys collateral worth 900 $ for **810 $**.
+- The 800 $ debt is repaid and Elif gets **10 $** back.
+- The **90 $** discount stays with the bot, because bots compete on speed, not on price.
 
-Bu para borçlunun kaybı; ayrıca hız yarışı gas savaşı ve sıra kapma (MEV) üretir.
+That money is the borrower's loss; the speed race also produces gas wars and MEV.
 
 ---
 
-## Çözüm: mühürlü ikinci fiyat
+## The solution: a sealed second-price auction
 
-Likide edilebilir pozisyon `LendingPool.startAuction` ile `KapaliZarf`'a gönderilir. Tur üç adım:
+A liquidatable position is sent to `KapaliZarf` through `LendingPool.startAuction`. A round has three
+steps:
 
-| Adım | Ne olur | Süre (4 + 4 blok) |
+| Step | What happens | Duration (4 + 4 blocks) |
 | --- | --- | --- |
-| **1. Mühürle** | Her teklif veren `keccak256(id, tutar, salt, adres)` hash'ini zincire yazar ve **aynı tutarı (tavanı) kilitler**. Ne hash ne kilit tutarı ele vermez. | 4 blok ≈ 1,2 sn |
-| **2. Aç** | Teklif veren tutarı ve salt'ı açıklar, kontrat hash'i doğrular. Tutar taban–tavan aralığında olmalı. | 4 blok ≈ 1,2 sn |
-| **3. Sonuçlan** | En yüksek teklif kazanır, **ikinci en yüksek teklifi** öder (tek teklifte taban fiyat). Borç kapanır, üstü borçluya döner, teminat kazanana gider. | 1 işlem |
+| **1. Seal** | Each bidder writes `keccak256(id, amount, salt, address)` on-chain and **locks the same amount (the cap)**. Neither the hash nor the lock reveals the bid. | 4 blocks ≈ 1.2 s |
+| **2. Reveal** | Bidders disclose amount and salt; the contract checks the hash. The amount must lie between the reserve and the cap. | 4 blocks ≈ 1.2 s |
+| **3. Settle** | The highest bid wins and pays the **second-highest bid** (the reserve if it is the only bid). The debt is repaid, the rest goes to the borrower, the collateral to the winner. | 1 transaction |
 
-**Kurallar**
+**Rules**
 
-- **Taban = klasik fiyat** (teminat değerinin %90'ı). Borçlu hiçbir zaman bugünkü modelden az almaz.
-- **Tavan = teminatın piyasa değeri.**
-- **Eşitlikte** önce açıklayan kazanır ve o tutarı öder.
-- **Açıklanmayan teklif** sonuçlandırmada kilidinden çıkar; ceza yok.
-- **Teklif gelmezse** (`NoBids`) herkes taban fiyattan `fallbackLiquidate` edebilir. Likidasyon hiçbir
-  zaman takılı kalmaz.
-- **`settle` hiçbir durumda revert etmez.** Fiyat borcun altındaysa ödenen kadar borç kapanır, eksik
-  kısım havuzda `badDebt` olarak kaydedilir (ortak `Split` kütüphanesi taşmayı imkânsız kılar).
-- **Çifte likidasyon yok:** açık artırmadaki pozisyon (`inAuction`) klasik yolla ya da ikinci kez
-  açık artırmaya gönderilemez.
-- En fazla 8 teklif veren (`settle` döngüsü sınırlı); kilitli bakiye çekilemez.
+- **Reserve = classic price** (90% of collateral value). The borrower never gets less than under
+  today's model.
+- **Cap = market value of the collateral.**
+- **Ties:** the bid revealed first wins and pays that amount.
+- **Unrevealed bids** are unlocked at settlement; no penalty.
+- **No bids** (`NoBids`): anyone can liquidate at the reserve price with `fallbackLiquidate`. A
+  liquidation can never get stuck.
+- **`settle` never reverts.** If the price is below the debt, the amount paid is repaid and the
+  shortfall is recorded as `badDebt` in the pool (the shared `Split` library makes underflow
+  impossible).
+- **No double liquidation:** a position in an auction (`inAuction`) cannot be liquidated the classic
+  way or sent to a second auction.
+- At most 8 bidders (bounded `settle` loop); locked balances cannot be withdrawn.
 
-**Neden herkes gerçek değerini yazar?** İkinci fiyat kuralında ödenen fiyat kendi teklifine değil,
-rakiplerin teklifine bağlıdır. Daha yükseğini yazmak, değerinden pahalıya kazanmaya yol açabilir;
-daha düşüğünü yazmak ödenecek fiyatı değiştirmez, yalnızca kazanma şansını azaltır. Böylece fiyat
-gerçek değere yaklaşır ve fark borçluya kalır.
+**Why does everyone bid their true value?** Under the second-price rule, what you pay depends on
+your rivals' bids, not on your own. Bidding higher can make you win at more than the collateral is
+worth to you; bidding lower doesn't change the price you pay, it only lowers your chance of winning.
+So the price moves toward true value, and the difference stays with the borrower.
 
-**Kim kazanır**
+**Who wins**
 
-| | Klasik | Kapalı Zarf |
+| | Classic | Kapalı Zarf |
 | --- | --- | --- |
-| Borçlu | 10 $ | 85 $ (ETH 900'de) |
-| Havuz (sert düşüş, ETH 850) | 35 $ kötü borç | 0 $ kötü borç |
-| Likidatör | Gas savaşı, sıra kapma | Fiyatla rekabet; kaybeden teklifin parası kilitten çıkar |
+| Borrower | 10 $ | 85 $ (ETH at 900) |
+| Pool (sharp drop, ETH at 850) | 35 $ bad debt | 0 $ bad debt |
+| Liquidator | Gas wars, front-running | Competes on price; a losing bid is unlocked |
 
 ---
 
-## Neden zincir, neden Monad
+## Why on-chain, why Monad
 
-**Zincir şart, çünkü:**
+**It needs the chain because:**
 
-- Mühürlü teklifin değeri, kimsenin (organizatör dahil) zarfları önceden açamamasında. Hash taahhüdü
-  ve doğrulama kontratta; açılış sırası ve ikinci fiyat herkesin denetleyebileceği kodla belirleniyor.
-- Teminat, ödeme, borç kapatma ve borçluya iade tek bir atomik işlemde (`settle`) gerçekleşiyor.
-- Teklif verenlerin parası kontratta kilitli; kazanan ödemekten kaçamaz, kaybeden parasını geri alır.
+- A sealed bid is only worth something if nobody, organizer included, can open the envelopes early.
+  The hash commitment and its check live in the contract; the reveal order and the second price are
+  decided by code anyone can audit.
+- Collateral, payment, debt repayment and the refund to the borrower happen in one atomic
+  transaction (`settle`).
+- Bidders' funds are locked in the contract: the winner cannot walk away from paying, and losers get
+  their money back.
 
-**Monad şart, çünkü kapalı zarf iki ayrı pencere ister:** teklif ve açıklama. Fiyat bu sürede yeniden
-oynarsa açık artırma anlamını yitirir.
+**It needs Monad because a sealed-bid auction needs two separate windows:** bidding and revealing.
+If the price moves again during that time, the auction loses its meaning.
 
-| | Ethereum L1 | Monad testnet (ölçülen) |
+| | Ethereum L1 | Monad testnet (measured) |
 | --- | --- | --- |
-| Blok süresi | 12 sn | ≈ 0,31 sn |
-| İki pencere için alt sınır | ≥ 24 sn | 4 + 4 blok ≈ 2,5 sn |
-| Fiyat düşüşünden sonuca | dakikalar | 10 blok, ≈ 3,1 sn |
+| Block time | 12 s | ≈ 0.31 s |
+| Lower bound for the two windows | ≥ 24 s | 4 + 4 blocks ≈ 2.5 s |
+| Price drop to settlement | minutes | 10 blocks, ≈ 3.1 s |
 
-**Monad'a özgü mühendislik** (bu sayıları mümkün kılan kısım):
+**Monad-specific engineering** (what makes these numbers possible):
 
-- **`monadLogs` / `monadNewHeads`:** Botlar event'leri blok oylanmadan, standart aboneliklerden ~1 sn
-  önce duyuyor ([`bots/ws.mjs`](bots/ws.mjs)). Abonelik düşerse dar aralıklı `eth_getLogs` ile devam.
-- **Bir blok erken gönderim:** Zincir `commitEnd` bloğunu gösterdiğinde gönderilen açıklama en erken
-  bir sonraki bloğa, yani açıklama penceresinin ilk bloğuna girer. Botlar bu yüzden pencere
-  kapanmadan gönderiyor.
-- **Sabit gas limiti:** Monad'da ücret kullanılan gas'tan değil gas limitinden kesiliyor. Limitler
-  test ölçümlerinden sabitlendi; her işlemden bir `eth_estimateGas` turu kalktı.
-- **Yerelde imza, tek çağrı, makbuz beklememe:** Nonce elle takip ediliyor, işlem tek
-  `eth_sendRawTransaction` ile gidiyor, sonuç event olarak geliyor.
-- **Rezerv bakiye kuralı:** Her demo cüzdanında en az 1 MON tutuluyor; geçici "insufficient balance"
-  yanıtları tekrar deneniyor.
-- Public RPC "15 istek/sn" sınırına karşı süreç başına ortak bir hız sınırlayıcı var.
+- **`monadLogs` / `monadNewHeads`:** the bots hear events before the block is voted, about 1 s
+  earlier than with the standard subscriptions ([`bots/ws.mjs`](bots/ws.mjs)). If the subscription
+  drops, they continue with narrow `eth_getLogs` polling.
+- **Sending one block early:** a reveal sent when the chain shows the `commitEnd` block lands in the
+  next block at the earliest, which is the first block of the reveal window. So the bots send before
+  the window closes.
+- **Fixed gas limits:** Monad charges the gas limit, not the gas used. Limits are pinned from test
+  measurements, which also removes an `eth_estimateGas` round trip from every transaction.
+- **Local signing, one call, no waiting for receipts:** nonces are tracked locally, each transaction
+  goes out with a single `eth_sendRawTransaction`, and the outcome arrives as an event.
+- **Reserve balance rule:** every demo wallet keeps at least 1 MON; transient "insufficient balance"
+  answers are retried.
+- A shared per-process rate limiter keeps the bots under the public RPC's 15 requests/s limit.
 
 ---
 
-## Testnet'te ölçülen sonuçlar
+## Results measured on testnet
 
-Bütün sayılar Monad testnet'te, 24 Ekim 2026'da, bot sürecinin loglarından ve zincirden.
+All numbers are from Monad testnet on October 24, 2026, taken from the bot process logs and the
+chain.
 
-**4 + 4 blok pencere** (şu anki deploy). Botların her işlemi gönderildiği bloğun hemen ardından girdi.
+**4 + 4 block windows** (the current deployment). Every bot transaction landed in the block right
+after the one it was sent at.
 
-| Adım | Blok | Gönderildikten sonra | İşlem |
+| Step | Block | After sending | Transaction |
 | --- | --- | --- | --- |
-| Fiyat düşüşü (ETH 1000 → 900) | 73786808 | +2 blok | [0x9eca…515c](https://testnet.monadvision.com/tx/0x9ecabd45095ca3e694474efbacbeb10d21e25d5ad50f293cf728b6cb6330515c) |
-| Klasik likidasyon: Hızlı Bot 810 öder, Elif'e 10 | 73786809 | +1 blok | [0x1fb6…8f92](https://testnet.monadvision.com/tx/0x1fb6ba43b3fdc38562895b9f4083710d12bc37461fa8fc51afc0e2a9bc9f8f92) |
-| Açık artırma başlar | 73786809 | +1 blok | [0xd1f5…7ac2](https://testnet.monadvision.com/tx/0xd1f53b63645af7d991a0545b0d3a453e9b83b15ca3ddd375d4179ca8c07e7ac2) |
-| Üç mühürlü teklif | 73786810 | +1 blok | |
-| Üç açıklama: 890, 885, 870 | 73786814 | +1 blok | |
-| Sonuç: Bot A kazanır, 885 öder, Elif'e 85 | 73786818 | +1 blok | [0x273c…d39e](https://testnet.monadvision.com/tx/0x273cf2c88c01161468f115f031b038ca8cb9b9627aea2bbaecfe968021c4d39e) |
+| Price drop (ETH 1000 → 900) | 73786808 | +2 blocks | [0x9eca…515c](https://testnet.monadvision.com/tx/0x9ecabd45095ca3e694474efbacbeb10d21e25d5ad50f293cf728b6cb6330515c) |
+| Classic liquidation: Fast Bot pays 810, Elif gets 10 | 73786809 | +1 block | [0x1fb6…8f92](https://testnet.monadvision.com/tx/0x1fb6ba43b3fdc38562895b9f4083710d12bc37461fa8fc51afc0e2a9bc9f8f92) |
+| Auction starts | 73786809 | +1 block | [0xd1f5…7ac2](https://testnet.monadvision.com/tx/0xd1f53b63645af7d991a0545b0d3a453e9b83b15ca3ddd375d4179ca8c07e7ac2) |
+| Three sealed bids | 73786810 | +1 block | |
+| Three reveals: 890, 885, 870 | 73786814 | +1 block | |
+| Settlement: Bot A wins, pays 885, Elif gets 85 | 73786818 | +1 block | [0x273c…d39e](https://testnet.monadvision.com/tx/0x273cf2c88c01161468f115f031b038ca8cb9b9627aea2bbaecfe968021c4d39e) |
 
-**Pencerelerin seçimi:** İlk deploy 8 + 8 blokla yapıldı (roadmap: güvenli başla, ölç, kısalt). O
-turda işlemler 1–2 blokta girdi, 6 blok boş kaldı; tur 19 blok, ≈ 6,1 sn sürdü. Pencereler 4 + 4'e
-indirildi: 2 bloğun payı kalıyor, tur 10 blok, ≈ 3,1 sn. Blok süresi iki turda da ≈ 0,31 sn ölçüldü.
+**Choosing the windows:** the first deployment used 8 + 8 blocks (roadmap: start safe, measure,
+shorten). In that round, transactions landed within 1–2 blocks and 6 blocks went unused; the round
+took 19 blocks, ≈ 6.1 s. The windows were cut to 4 + 4: a 2-block margin remains and the round takes
+10 blocks, ≈ 3.1 s. Block time measured ≈ 0.31 s in both rounds.
 
-**Başka senaryolar** (sahne sayfasından canlı oynandı):
+**Other scenarios** (played live from the stage page):
 
-- "Sen de teklif ver" ile 892 $ mühürlendi, Bot B %0,5 marjla 895 verdi: Bot B kazandı, ikinci fiyat
-  olarak 892 ödedi, Elif'e 92 $ döndü (klasikten +82 $).
-- İlk 4 + 4 denemesinde bir bot hatası (eski deploy'un salt dosyaları yeniden kullanıldı; düzeltildi)
-  yüzünden hiçbir teklif açılamadı. Tur `NoBids` ile bitti ve Bot C taban fiyattan
-  `fallbackLiquidate` etti: yedek yol testnet'te istemeden ama gerçekten denenmiş oldu.
+- With a sealed "Sen" ("you") bid of 892 $ and Bot B at a 0.5% margin bidding 895: Bot B won, paid the
+  second price of 892, and Elif got 92 $ back (+82 $ over classic).
+- In the first 4 + 4 attempt, a bot bug (salt files from the previous deployment were reused; fixed)
+  meant no bid could be revealed. The round ended with `NoBids` and Bot C liquidated at the reserve
+  price with `fallbackLiquidate`: the fallback path was tested on testnet, unintentionally but for
+  real.
 
 ---
 
-## Demo nasıl izlenir ve denenir
+## How to watch and play the demo
 
-| Adres | Ne var | Kim kullanabilir |
+| URL | What's there | Who can use it |
 | --- | --- | --- |
-| [`/`](https://kapali-zarf.vercel.app) | Tanıtım: sorun, Vickrey'in hikâyesi, üç adım, **kendi teklifini dene** hesaplayıcısı, neden Monad, kontrat linkleri | Herkes |
-| [`/demo`](https://kapali-zarf.vercel.app/demo) | Sahne, canlı mod: testnet'teki gerçek event'ler `monadLogs` ile akar | Herkes izler; düşüş ve reset için bot süreci gerekir (aşağıda) |
-| [`/demo?mock=1`](https://kapali-zarf.vercel.app/demo?mock=1) | Kayıt modu: aynı ekran, kontratın kurallarıyla tarayıcıda hesaplanan tur | Herkes, zincir ve bot olmadan |
+| [`/`](https://kapali-zarf.vercel.app) | Landing page: the problem, Vickrey's story, the three steps, a **try-your-own-bids** calculator, why Monad, contract links | Everyone |
+| [`/demo`](https://kapali-zarf.vercel.app/demo) | The stage, live mode: real testnet events streamed with `monadLogs` | Everyone can watch; the drop and reset need the bot process (see below) |
+| [`/demo?mock=1`](https://kapali-zarf.vercel.app/demo?mock=1) | Replay mode: the same screen, with the round computed in the browser by the contract's rules | Everyone, no chain and no bots needed |
 
-**Sahne sayfasında**
+**On the stage page**
 
-- Üstte büyük ETH fiyatı ve **"ETH %10 düştü"** butonu.
-- Solda klasik likidasyon, sağda Kapalı Zarf; iki aynı pozisyon, sağlık oranı göstergesiyle.
-- Sağ sütunda zarflar mühürlü belirir, açıklama penceresinde açılır; kazanan öne çıkar, "Ödenen:
-  ikinci teklif" yazar, mühür vurulur, iade Elif'in kartına uçar.
-- Alt şeritte **fark** (`AuctionSettled.refund − ClassicLiquidated.refund`), geçen süre ve her adımın
-  explorer linki. Ekrandaki rakamların hepsi zincirdeki event'lerden geliyor.
+- At the top, the large ETH price and the **"ETH %10 düştü"** ("ETH fell 10%") button.
+- Classic liquidation on the left, Kapalı Zarf on the right: two identical positions with a health
+  factor gauge.
+- In the right column, envelopes appear sealed and open during the reveal window; the winner is
+  highlighted, "paid: second bid" is shown, the seal is stamped, and the refund flies into Elif's
+  card.
+- The bottom strip shows the **difference** (`AuctionSettled.refund − ClassicLiquidated.refund`), the
+  elapsed time and an explorer link for every step. Every number on screen comes from on-chain
+  events.
 
-**Kontrol paneli** (sağda, `P` ile aç/kapa)
+**Control panel** (on the right, toggle with `P`)
 
-| Bölüm | Ne yapar |
+| Section | What it does |
 | --- | --- |
-| Senaryo | Düşüş %7 / %10 / %15 / %20 (930 / 900 / 850 / 800 $). %15 ve %20'de satış fiyatı borcu karşılamaz; alt şerit havuzun kötü borcunu da karşılaştırır. |
-| Botların stratejisi | Her botun marjı (%0–10) ve aç/kapa. Hepsi kapalıysa tur teklifsiz kalır ve yedek yol oynar. |
-| Sen de teklif ver | Taban–tavan arasında bir tutar seçip mühürle: sonraki açık artırmada "Sen" zarfı olarak açılır. |
-| Canlı akış / Geçmiş | Turun bütün event'leri blok numarası ve explorer linkiyle; biten turların tablosu, ▶ ile ×2,5 yavaş çekim tekrar. |
+| Senaryo (scenario) | Drop of 7 / 10 / 15 / 20% (930 / 900 / 850 / 800 $). At 15% and 20% the sale price no longer covers the debt; the bottom strip then also compares the pool's bad debt. |
+| Botların stratejisi (bot strategies) | Each bot's margin (0–10%) and an on/off switch. With every bot off, the round gets no bids and the fallback path plays. |
+| Sen de teklif ver (place your own bid) | Pick an amount between reserve and cap and seal it: it opens as the "Sen" envelope in the next auction. |
+| Canlı akış / Geçmiş (live feed / history) | Every event of the round with its block number and explorer link; a table of finished rounds, with ▶ to replay any round at x2.5 slow motion. |
 
-Terimlerin (sağlık oranı, taban, tavan, mühürlü, ikinci fiyat, kötü borç) üzerine gelince açıklama
-çıkar. Tuşlar: `Boşluk` fiyat düşüşü, `R` reset, `P` panel, `Esc` tekrardan çık.
+Hovering a term (health factor, reserve, cap, sealed, second price, bad debt) shows an explanation.
+Keys: `Space` price drop, `R` reset, `P` panel, `Esc` leave the replay.
 
-**Canlı modda bot süreci neden gerekli?** Sahne sayfası zincire hiç yazmaz; owner anahtarı tarayıcıya
-girmez. Fiyatı düşürme, reset, strateji ve "Sen" teklifi, botları çalıştıran bilgisayardaki
-`localhost:8787` uç noktasına gider. Bu yüzden yayındaki sayfayı açan herkes zincirdeki turu canlı
-izler, ama düşüş butonu yalnızca bot sürecinin çalıştığı makinede aktiftir. Bot süreci kapalıysa
-buton gri kalır; o zaman `?mock=1` aynı deneyimi zincirsiz sunar.
+**Why does live mode need the bot process?** The stage page never writes to the chain, and the owner
+key never enters the browser. The price drop, reset, strategies and the "Sen" bid go to the
+`localhost:8787` endpoint on the computer running the bots. So anyone who opens the deployed page
+watches the on-chain round live, but the drop button is only active on the machine running the bot
+process. When the bot process is not reachable the button is grey; `?mock=1` then offers the same
+experience without the chain.
 
 ---
 
-## Neler gerçek, neler demo için basitleştirildi
+## What is real and what is simplified for the demo
 
-| Bileşen | Durum |
+| Component | Status |
 | --- | --- |
-| `KapaliZarf` (mühür, açma, ikinci fiyat, iade, yedek yol) | **Gerçek**, testnet'te çalışıyor |
-| `LendingPool` (pozisyon, sağlık oranı, klasik likidasyon, açık artırmaya gönderme, kötü borç) | **Gerçek**, ama basit: tek teminat, faiz yok, teminatın tamamı satılır |
-| Botlar (dinleme, imza, gönderim, zamanlama) | **Gerçek** işlemler gönderiyor |
-| Bot teklifleri | Gerçek bir piyasa değerlendirmesi değil: `değer × (1 − marj)`, varsayılan marjlar %1,11 / %1,66 / %3,33 |
-| `MockOracle` | **Demo için.** ETH fiyatını owner elle değiştiriyor; sahnede "%10 düştü" demenin tek yolu bu. Gerçek protokolde Pyth/Chainlink olur. |
-| `MockUSD`, `MockWETH` | **Demo için.** Herkes basabilir; yalnızca testnet içindir, gerçek değeri yok. |
-| Sahne sayfası canlı mod | Gerçek event'ler; süre gösterimi blok sayısı × 0,31 sn (ölçülen ortalama) |
-| `?mock=1` ve tanıtım sayfasındaki hesaplayıcı | Zincire dokunmaz; kontratın kurallarını tarayıcıda uygular |
-| Tanıtım sayfasındaki rakamlar (10 → 85 $, ≈ 3,1 sn, 10 blok) | Ölçülen turdan sabit yazıldı, canlı okunmuyor |
+| `KapaliZarf` (sealing, revealing, second price, refund, fallback) | **Real**, running on testnet |
+| `LendingPool` (positions, health factor, classic liquidation, sending to auction, bad debt) | **Real**, but simple: one collateral type, no interest, the whole collateral is sold |
+| Bots (listening, signing, sending, timing) | **Real**, sending real transactions |
+| Bot bids | Not a real market valuation: `value × (1 − margin)`, default margins 1.11% / 1.66% / 3.33% |
+| `MockOracle` | **For the demo.** The owner sets the ETH price by hand; it's the only way to say "ETH fell 10%" on stage. A real protocol would use Pyth or Chainlink. |
+| `MockUSD`, `MockWETH` | **For the demo.** Anyone can mint; testnet only, no real value. |
+| Stage page, live mode | Real events; elapsed time shown as block count × 0.31 s (the measured average) |
+| `?mock=1` and the calculator on the landing page | Don't touch the chain; apply the contract's rules in the browser |
+| Numbers on the landing page (10 → 85 $, ≈ 3.1 s, 10 blocks) | Written from the measured round, not read live |
 
 ---
 
-## Mimari
+## Architecture
 
 ```mermaid
 flowchart LR
-  subgraph Tarayıcı
-    L["Tanıtım /"]
-    S["Sahne /demo"]
+  subgraph BR["Browser"]
+    L["Landing /"]
+    S["Stage /demo"]
   end
-  subgraph Sunum bilgisayarı
-    B["bots.mjs<br/>Bot A, B, C, Hızlı Bot, Sen"]
+  subgraph PC["Presenter's computer"]
+    B["bots.mjs<br/>Bot A, B, C, Fast Bot, Sen"]
     D["localhost:8787<br/>/drop /reset /config /bid"]
   end
-  subgraph Monad testnet
+  subgraph MT["Monad testnet"]
     O[MockOracle]
     P[LendingPool]
     Z[KapaliZarf]
@@ -270,19 +289,20 @@ flowchart LR
   B -- "commit, reveal, settle" --> Z
   Z -- "repayFromAuction" --> P
   O & P & Z -. "monadLogs" .-> B
-  O & P & Z -. "monadLogs (ayrı RPC)" .-> S
+  O & P & Z -. "monadLogs (separate RPC)" .-> S
 ```
 
-Düz oklar işlem, kesikli oklar event akışı. Bot süreci ve sahne sayfası farklı RPC uçları kullanır.
+Solid arrows are transactions, dashed arrows are event streams. The bot process and the stage page
+use different RPC endpoints.
 
-| Katman | Teknoloji | Dosyalar |
+| Layer | Technology | Files |
 | --- | --- | --- |
-| Kontratlar | Solidity 0.8.28, Foundry, OpenZeppelin (`SafeERC20`, `ReentrancyGuard`, `Ownable`) | [`src/`](src) |
-| Botlar | Node 22, viem, ham WebSocket | [`bots/`](bots) |
-| Sahne ve tanıtım | Vite, React 19, TypeScript, viem, framer-motion | [`web/`](web) |
-| Ortak sözleşme | Adresler ve ABI'ler | [`shared/`](shared) |
+| Contracts | Solidity 0.8.28, Foundry, OpenZeppelin (`SafeERC20`, `ReentrancyGuard`, `Ownable`) | [`src/`](src) |
+| Bots | Node 22, viem, raw WebSocket | [`bots/`](bots) |
+| Stage and landing | Vite, React 19, TypeScript, viem, framer-motion | [`web/`](web) |
+| Shared contract | Addresses and ABIs | [`shared/`](shared) |
 
-**Event'ler** (sahne sayfası yalnızca bunlarla beslenir)
+**Events** (the stage page is driven only by these)
 
 ```solidity
 event PriceUpdated(uint256 price);
@@ -295,72 +315,72 @@ event NoBids(bytes32 indexed id);
 event FallbackLiquidated(bytes32 indexed id, address indexed liquidator, uint256 price, uint256 refund);
 ```
 
-**Repo yapısı**
+**Repository layout**
 
 ```text
 src/                 KapaliZarf, LendingPool, Split, MockOracle, MockUSD, MockWETH
-test/                Base.t.sol (ortak kurulum), KapaliZarf.t.sol, LendingPool.t.sol
-script/Deploy.s.sol  beş kontratı deploy eder, shared/addresses.json yazar
+test/                Base.t.sol (shared setup), KapaliZarf.t.sol, LendingPool.t.sol
+script/Deploy.s.sol  deploys the five contracts, writes shared/addresses.json
 bots/
-  config.mjs         RPC, hız sınırlayıcı, sabit gas limitleri, yerel imzalı gönderici
-  ws.mjs             monadLogs / monadNewHeads aboneliği, HTTP yoklama yedeği
-  bots.mjs           bütün botlar tek süreçte + localhost:8787
+  config.mjs         RPC, rate limiter, fixed gas limits, locally signing sender
+  ws.mjs             monadLogs / monadNewHeads subscriptions, HTTP polling fallback
+  bots.mjs           all bots in one process + localhost:8787
   drop-server.mjs    /health /drop /reset /config /bid
-  reset.mjs          demoyu başlangıç durumuna getirir
-  wallets.mjs        demo cüzdanlarını üretir
-  drop.mjs           fiyatı terminalden düşürür
-  export-abi.mjs     ABI'leri shared/abi/'ye kopyalar
-web/                 tanıtım (/) ve sahne (/demo)
-shared/              addresses.json (deploy çıktısı), abi/
-broadcast/           testnet deploy kayıtları
+  reset.mjs          puts the demo back to its starting state
+  wallets.mjs        creates the demo wallets
+  drop.mjs           drops the price from the terminal
+  export-abi.mjs     copies the ABIs to shared/abi/
+web/                 landing (/) and stage (/demo)
+shared/              addresses.json (deploy output), abi/
+broadcast/           testnet deploy records
 ```
 
 ---
 
-## Deploy edilen kontratlar
+## Deployed contracts
 
-Monad testnet (chain ID 10143), deploy bloğu 73786456, pencereler 4 + 4 blok.
+Monad testnet (chain ID 10143), deploy block 73786456, windows of 4 + 4 blocks.
 
-| Kontrat | Adres | Görevi |
+| Contract | Address | Role |
 | --- | --- | --- |
-| KapaliZarf | [`0xCf1a33B4f4A0726acF4686b7D00E707845D9e68F`](https://testnet.monadvision.com/address/0xCf1a33B4f4A0726acF4686b7D00E707845D9e68F) | Mühürlü teklif, açıklama, ikinci fiyat, iade, yedek yol |
-| LendingPool | [`0x09F2136e0412562F68f96E06788de495B03fbEAF`](https://testnet.monadvision.com/address/0x09F2136e0412562F68f96E06788de495B03fbEAF) | Pozisyonlar, klasik likidasyon, açık artırmayı başlatma, kötü borç |
-| MockOracle | [`0xcc3a537f30f65ee36D14c4f7e376612448C99d19`](https://testnet.monadvision.com/address/0xcc3a537f30f65ee36D14c4f7e376612448C99d19) | Demo ETH fiyatı |
-| MockUSD | [`0xcb9A73420F9ACb5076CEd388857E2F8A91a5CCcF`](https://testnet.monadvision.com/address/0xcb9A73420F9ACb5076CEd388857E2F8A91a5CCcF) | Borç token'ı (mUSD) |
-| MockWETH | [`0x74D7F8e46549b5C8Fe24119B282B6eEA1fde4CEC`](https://testnet.monadvision.com/address/0x74D7F8e46549b5C8Fe24119B282B6eEA1fde4CEC) | Teminat token'ı (mWETH) |
+| KapaliZarf | [`0xCf1a33B4f4A0726acF4686b7D00E707845D9e68F`](https://testnet.monadvision.com/address/0xCf1a33B4f4A0726acF4686b7D00E707845D9e68F) | Sealed bids, reveals, second price, refund, fallback |
+| LendingPool | [`0x09F2136e0412562F68f96E06788de495B03fbEAF`](https://testnet.monadvision.com/address/0x09F2136e0412562F68f96E06788de495B03fbEAF) | Positions, classic liquidation, starting auctions, bad debt |
+| MockOracle | [`0xcc3a537f30f65ee36D14c4f7e376612448C99d19`](https://testnet.monadvision.com/address/0xcc3a537f30f65ee36D14c4f7e376612448C99d19) | Demo ETH price |
+| MockUSD | [`0xcb9A73420F9ACb5076CEd388857E2F8A91a5CCcF`](https://testnet.monadvision.com/address/0xcb9A73420F9ACb5076CEd388857E2F8A91a5CCcF) | Debt token (mUSD) |
+| MockWETH | [`0x74D7F8e46549b5C8Fe24119B282B6eEA1fde4CEC`](https://testnet.monadvision.com/address/0x74D7F8e46549b5C8Fe24119B282B6eEA1fde4CEC) | Collateral token (mWETH) |
 
-Demo cüzdanları (Elif'ler, botlar, "Sen") [`shared/addresses.json`](shared/addresses.json)'da.
+The demo wallets (the two Elifs, the bots, "Sen") are in [`shared/addresses.json`](shared/addresses.json).
 
 ---
 
-## Testler ve CI
+## Tests and CI
 
 ```bash
 forge test -vv --gas-report
 ```
 
-39 test (fuzz dahil), dokümandaki sayılarla (1 ETH teminat, 800 borç, ETH 1000 → 900):
+39 tests (including fuzzing), using the example's numbers (1 ETH collateral, 800 debt, ETH 1000 → 900):
 
-| Konu | Testler |
+| Area | Tests |
 | --- | --- |
-| Dokümandaki örnek | `test_SecondPriceAuction_ElifGets85`, `test_ClassicLiquidation_ElifGets10`, `test_ReserveEqualsClassicPrice` |
-| Fiyat kuralları | `test_SingleBidPaysReserve`, `test_TieGoesToFirstRevealAtThatPrice`, `testFuzz_WinnerPaysSecondHighest` (512 tur; borçlu hiçbir zaman klasikten az almaz, modül her zaman bakiyeleriyle karşılanır) |
-| Borcun altında fiyat | `test_SettleBelowDebt_NeverReverts`, `test_ClassicBelowDebt_RecordsBadDebt` |
-| Teklif gelmeyince | `test_NoBidsThenFallbackAtClassicPrice`, `test_CommittedButNobodyRevealed_NoBidsAndUnlocked`, `test_UnrevealedUnlocked` |
-| Mühür | `test_HashMatchesOffchain` (viem'in ürettiği hash'le), yanlış salt, farklı tutar, başkasının hash'ini kopyalama |
-| Pencereler | erken açıklama, geç teklif, erken ve çift sonuçlandırma, faz geçişleri |
-| Bakiyeler ve sınırlar | kilitli bakiye çekilemez, yetersiz bakiye, 8 teklif sınırı, 8 teklifle `settle` gas ölçümü |
-| Havuz ve yetki | çifte likidasyon yok, sağlıklı pozisyon likide edilemez, yalnızca havuz açık artırma açar, yalnızca owner fiyat değiştirir |
+| The example | `test_SecondPriceAuction_ElifGets85`, `test_ClassicLiquidation_ElifGets10`, `test_ReserveEqualsClassicPrice` |
+| Pricing rules | `test_SingleBidPaysReserve`, `test_TieGoesToFirstRevealAtThatPrice`, `testFuzz_WinnerPaysSecondHighest` (512 runs; the borrower never gets less than classic, and the module is always backed by its balances) |
+| Price below the debt | `test_SettleBelowDebt_NeverReverts`, `test_ClassicBelowDebt_RecordsBadDebt` |
+| No bids | `test_NoBidsThenFallbackAtClassicPrice`, `test_CommittedButNobodyRevealed_NoBidsAndUnlocked`, `test_UnrevealedUnlocked` |
+| Sealing | `test_HashMatchesOffchain` (against a hash produced by viem), wrong salt, different amount, copying another bidder's hash |
+| Windows | early reveal, late commit, early and double settlement, phase transitions |
+| Balances and limits | locked balance cannot be withdrawn, insufficient balance, the 8-bidder limit, `settle` gas with 8 bidders |
+| Pool and access | no double liquidation, a healthy position cannot be liquidated, only the pool opens auctions, only the owner moves the price |
 
-[GitHub Actions](.github/workflows/test.yml) her push'ta `forge fmt --check`, `forge build`,
-`forge test` ve sahne sayfasının lint + build'ini çalıştırır. Botlar açılışta yerel hash
-kodlamasını kontrattaki `hashBid` ile karşılaştırır; tutmazsa başlamaz.
+[GitHub Actions](.github/workflows/test.yml) runs `forge fmt --check`, `forge build`, `forge test`
+and the stage page's lint + build on every push. At start-up the bots compare their local hash
+encoding with the contract's `hashBid`; if they differ, the bots refuse to start.
 
 ---
 
-## Kurulum ve çalıştırma
+## Setup and running
 
-**Gerekenler:** Foundry, Node 22+.
+**Requirements:** Foundry, Node 22+.
 
 ```bash
 npm install
@@ -369,25 +389,25 @@ forge build
 forge test
 ```
 
-**1. Ortam.** `.env.example`'ı `.env` olarak kopyalayın:
+**1. Environment.** Copy `.env.example` to `.env`:
 
-- `MONAD_TESTNET_RPC`, `MONAD_TESTNET_WSS`: varsayılan olarak public QuickNode uçları yazılı.
-- `DEPLOYER_PK`: faucet'ten MON alınmış cüzdan (owner). En az 15–20 MON önerilir: deploy ≈ 1 MON,
-  her demo cüzdanına 1,5 MON gönderilir ve Monad owner'da ≈ 10 MON rezerv bırakır.
+- `MONAD_TESTNET_RPC`, `MONAD_TESTNET_WSS`: the public QuickNode endpoints are filled in by default.
+- `DEPLOYER_PK`: a wallet funded from the faucet (the owner). 15–20 MON recommended: the deploy
+  costs ≈ 1 MON, each demo wallet gets 1.5 MON, and Monad keeps ≈ 10 MON in reserve on the owner.
 
-**2. Demo cüzdanları** (iki Elif, dört bot, "Sen"):
+**2. Demo wallets** (two Elifs, four bots, "Sen"):
 
 ```bash
 npm run wallets
 ```
 
-**3. Deploy** (`shared/addresses.json` ve `shared/abi/` yazılır):
+**3. Deploy** (writes `shared/addresses.json` and `shared/abi/`):
 
 ```bash
 npm run deploy
 ```
 
-**4. Her provada:**
+**4. Before every rehearsal:**
 
 ```bash
 npm run reset
@@ -395,29 +415,29 @@ npm run bots
 npm run web
 ```
 
-`reset` fiyatı 1000'e çeker, cüzdanlara gerekirse gas gönderir, botların bakiyesini yükler, yarım
-kalmış açık artırmayı kapatır ve iki aynı pozisyonu açar (sağlık oranı 1,06); ≈ 10 sn. `bots` açık
-kalır. Sahnede butona basın ya da terminalden:
+`reset` sets the price back to 1000, tops up gas where needed, funds the bots, closes any unfinished
+auction and opens the two identical positions (health factor 1.06); it takes ≈ 10 s. `bots` keeps
+running. Press the button on stage, or from the terminal:
 
 ```bash
 npm run drop
 ```
 
-Sahne sayfası için botlardan farklı bir RPC ucu önerilir (`web/.env.local`):
+A different RPC endpoint than the bots is recommended for the stage page (`web/.env.local`):
 
 ```bash
 VITE_RPC_URL=https://rpc-testnet.monadinfra.com
 VITE_WSS_URL=wss://rpc-testnet.monadinfra.com
 ```
 
-**Yerelde denemek (Anvil):**
+**Running locally (Anvil):**
 
 ```bash
 anvil --block-time 1
 ```
 
-Ayrı bir `.env.anvil` dosyasına `RPC_URL=http://127.0.0.1:8545`, `WS_URL=ws://127.0.0.1:8545` ve
-Anvil'in anahtarlarını (`DEPLOYER_PK`, `ELIF_KLASIK_PK`, …, `GUEST_PK`) koyun:
+Put `RPC_URL=http://127.0.0.1:8545`, `WS_URL=ws://127.0.0.1:8545` and Anvil's keys
+(`DEPLOYER_PK`, `ELIF_KLASIK_PK`, …, `GUEST_PK`) in a separate `.env.anvil`, then:
 
 ```bash
 set -a; . ./.env.anvil; set +a
@@ -428,91 +448,92 @@ npm run web          # http://localhost:5173/demo?chain=31337
 ```
 
 <details>
-<summary><b>Ayarlar ve gas limitleri</b></summary>
+<summary><b>Settings and gas limits</b></summary>
 
-| Değişken | Varsayılan | Ne işe yarar |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `COMMIT_BLOCKS`, `REVEAL_BLOCKS` | 8, 8 (`.env`'de 4, 4) | Deploy anında pencere uzunlukları |
-| `MONAD_TESTNET_WSS`, `WS_URL` | RPC'den türetilir | Botların WebSocket ucu |
-| `RPC_RPS` | 12 | Süreç başına HTTP istek sınırı |
-| `DROP_PORT` | 8787 | Sahne uç noktası |
-| `DROP_PRICE` | 900 | `npm run drop`'un varsayılan fiyatı |
-| `PRIORITY_GWEI` | 2 | Fee: son base fee × 2 + bu tip |
-| `MIN_GAS_MON`, `GAS_TOPUP_MON` | 1, 1,5 | Bu bakiyenin altındaki cüzdana bu kadar MON gönderilir |
-| `OWNER_RESERVE_MON` | 10 | Owner'ın altına düşmeyeceği MON bakiyesi |
-| `EXPLORER_TX_URL` | MonadVision testnet | Loglardaki işlem linkleri |
-| `RPC_URL`, `ENV_FILE` | — | Başka bir zincirde (Anvil) denemek için |
+| `COMMIT_BLOCKS`, `REVEAL_BLOCKS` | 8, 8 (4, 4 in `.env`) | Window lengths, read at deploy time |
+| `MONAD_TESTNET_WSS`, `WS_URL` | derived from the RPC | The bots' WebSocket endpoint |
+| `RPC_RPS` | 12 | HTTP request limit per process |
+| `DROP_PORT` | 8787 | Stage endpoint |
+| `DROP_PRICE` | 900 | Default price for `npm run drop` |
+| `PRIORITY_GWEI` | 2 | Fee: latest base fee × 2 + this tip |
+| `MIN_GAS_MON`, `GAS_TOPUP_MON` | 1, 1.5 | A wallet below this balance gets this much MON |
+| `OWNER_RESERVE_MON` | 10 | MON balance the owner never goes below |
+| `EXPLORER_TX_URL` | MonadVision testnet | Transaction links in the logs |
+| `RPC_URL`, `ENV_FILE` | — | To try another chain (Anvil) |
 
-Sahne sayfası: `VITE_RPC_URL`, `VITE_WSS_URL`, `VITE_DROP_URL` (varsayılan `http://localhost:8787`),
-`VITE_EXPLORER_TX_URL`, `VITE_CHAIN_ID`, `VITE_BLOCK_SECONDS` (varsayılan 0,31).
+Stage page: `VITE_RPC_URL`, `VITE_WSS_URL`, `VITE_DROP_URL` (default `http://localhost:8787`),
+`VITE_EXPLORER_TX_URL`, `VITE_CHAIN_ID`, `VITE_BLOCK_SECONDS` (default 0.31).
 
-Gas limitleri ([`bots/config.mjs`](bots/config.mjs)): `forge --gas-report` maksimumu + 21k, ×1,5.
+Gas limits ([`bots/config.mjs`](bots/config.mjs)): `forge --gas-report` maximum + 21k, × 1.5.
 
-| Fonksiyon | Limit |
+| Function | Limit |
 | --- | --- |
-| setPrice | 80.000 |
-| startAuction | 450.000 |
-| commit | 215.000 |
-| reveal | 220.000 |
-| settle (8 teklif veren) | 380.000 |
-| liquidateClassic | 195.000 |
-| fallbackLiquidate | 340.000 |
+| setPrice | 80,000 |
+| startAuction | 450,000 |
+| commit | 215,000 |
+| reveal | 220,000 |
+| settle (8 bidders) | 380,000 |
+| liquidateClassic | 195,000 |
+| fallbackLiquidate | 340,000 |
 
 </details>
 
 ---
 
-## Sınırlamalar ve sonraki adımlar
+## Limitations and next steps
 
-**Bilinen sınırlamalar**
+**Known limitations**
 
-- Fiyat beslemesi demo için elle kontrol ediliyor; tokenlar sahte.
-- Havuz basit: tek teminat türü, faiz yok, kısmi likidasyon yok; teminatın tamamı satılıyor.
-- Teklif veren tavan fiyatın tamamını kilitliyor; sermaye verimli değil.
-- Teklif verenlerin sayısı zincirde görünür (tutarlar görünmez).
-- Fiyat açık artırma süresince (≈ 3 sn) oynarsa riski teklif verenler taşır; teminat değeri açık
-  artırma başında sabitlenir.
-- Sahne sayfasındaki düşüş ve reset düğmeleri, botları çalıştıran bilgisayarı gerektiriyor.
-- Kontrat kaynak kodları explorer'da henüz doğrulanmadı; denetim yapılmadı.
+- The price feed is set by hand for the demo; the tokens are mock tokens.
+- The pool is simple: one collateral type, no interest, no partial liquidation; the whole collateral
+  is sold.
+- Bidders lock the full cap; this is not capital efficient.
+- The number of bidders is visible on-chain (the amounts are not).
+- If the price moves during the auction (≈ 3 s), the bidders carry that risk; the collateral value is
+  fixed when the auction starts.
+- The stage page's drop and reset buttons need the computer running the bots.
+- The contract sources are not yet verified on the explorer, and the contracts are not audited.
 
-**Sonraki adımlar**
+**Next steps**
 
-- Gerçek oracle (Pyth / Chainlink) ve Monad'daki bir borç protokolüne modül olarak entegrasyon.
-- Kısmi likidasyon ve birden fazla teminat türü.
-- Tavan yerine daha düşük, teminatlı bir kilit; teklif sayısını gizleyen tasarımlar.
-- Teklif stratejilerini AI ajanlarına bırakan likidatör SDK'sı.
-- Bot sürecini barındırılan bir servise taşıyıp düşüş butonunu yetkili herkese açmak.
+- A real oracle (Pyth / Chainlink) and integration as a module into a lending protocol on Monad.
+- Partial liquidation and multiple collateral types.
+- A smaller, collateralised lock instead of the full cap; designs that hide the number of bids.
+- A liquidator SDK that lets AI agents set bidding strategies.
+- Moving the bot process to a hosted service and opening the drop button to authorised users.
 
 ---
 
-## Blitz sırasında yapılanlar
+## Built during the Blitz
 
-**Etkinlikten önce hazırlanmış kod, fikir ya da proje yok.** Bütün kod Monad Blitz Ankara v4
-sırasında, 24 Ekim 2026'da yazıldı; standart kütüphaneler (OpenZeppelin, forge-std, viem, React)
-dışında hazır kod kullanılmadı. Geliştirmede yapay zekâ destekli kodlama araçları kullanıldı.
+**No code, idea or project was prepared before the event.** All code was written during Monad
+Blitz Ankara v4 on October 24, 2026; apart from standard libraries (OpenZeppelin, forge-std, viem,
+React), no existing code was used. AI-assisted coding tools were used during development.
 
-| Saat | Ne yapıldı |
+| Time | What was built |
 | --- | --- |
-| 12:11 | İlk commit: kontratlar, testler, deploy betiği, botlar |
+| 12:11 | First commit: contracts, tests, deploy script, bots |
 | 12:20 | CI (fmt, build, test) |
-| 12:31–12:36 | Donan event imzaları, `Split` ve kötü borç, ceza kuralının kaldırılması, testlerin ayrılması, `shared/` çıktıları |
-| 12:42 | Olay güdümlü botlar: `monadLogs`, yerelde imza, sabit gas, `localhost:8787` |
-| 12:51–12:55 | Sahne sayfası (Vite + React), Anvil'de uçtan uca deneme |
-| 13:06–13:11 | Monad testnet deploy (8 + 8), ilk canlı tur, ölçüme göre 4 + 4 ile yeniden deploy |
-| 13:14 | Ölçülen blok süresi (0,31 sn) sahneye |
-| 13:23–13:35 | Kontrol paneli: senaryo, bot stratejileri, "Sen de teklif ver", canlı akış, geçmiş, yavaş çekim |
-| 13:40 | Tanıtım sayfası, sahne `/demo`'ya taşındı |
-| 14:27–15:29 | Logo, tanıtım sayfasına Vickrey'in hikâyesi |
+| 12:31–12:36 | Frozen event signatures, `Split` and bad debt, removal of the unrevealed-bid penalty, split tests, `shared/` outputs |
+| 12:42 | Event-driven bots: `monadLogs`, local signing, fixed gas, `localhost:8787` |
+| 12:51–12:55 | Stage page (Vite + React), end-to-end run on Anvil |
+| 13:06–13:11 | Monad testnet deploy (8 + 8), first live round, redeploy with 4 + 4 based on the measurements |
+| 13:14 | Measured block time (0.31 s) on the stage |
+| 13:23–13:35 | Control panel: scenario, bot strategies, "Sen" bid, live feed, history, slow-motion replay |
+| 13:40 | Landing page; the stage moved to `/demo` |
+| 14:27–15:43 | Logo, Vickrey's story and the Nobel medal on the landing page |
 
-Bütün adımlar [commit geçmişinde](https://github.com/iremsaniyebaran/kapali-zarf/commits/main) görülebilir.
+Every step can be seen in the [commit history](https://github.com/iremsaniyebaran/kapali-zarf/commits/main).
 
 ---
 
-## Ekip
+## Team
 
 | | GitHub | LinkedIn |
 | --- | --- | --- |
 | **İrem Saniye Baran** | [@iremsaniyebaran](https://github.com/iremsaniyebaran) | [linkedin.com/in/iremsaniyebaran](https://www.linkedin.com/in/iremsaniyebaran/) |
 | **Eyüp Efe Karakoca** | [@SweetieBirdX](https://github.com/SweetieBirdX) | [linkedin.com/in/eyupefekarakoca](https://www.linkedin.com/in/eyupefekarakoca/) |
 
-Lisans: MIT
+License: MIT
