@@ -1,158 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {Test} from "forge-std/Test.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {MockUSD} from "../src/MockUSD.sol";
-import {MockWETH} from "../src/MockWETH.sol";
-import {MockOracle} from "../src/MockOracle.sol";
-import {LendingPool} from "../src/LendingPool.sol";
 import {KapaliZarf} from "../src/KapaliZarf.sol";
+import {DemoBase} from "./Base.t.sol";
 
-contract KapaliZarfTest is Test {
-    MockUSD internal usd;
-    MockWETH internal weth;
-    MockOracle internal oracle;
-    LendingPool internal pool;
-    KapaliZarf internal kz;
-
-    address internal elif = makeAddr("elif");
-    address internal botA = makeAddr("botA");
-    address internal botB = makeAddr("botB");
-    address internal botC = makeAddr("botC");
-    address internal fastBot = makeAddr("fastBot");
-
-    // The document's example: 1 ETH collateral, 800 debt, ETH falls from 1000 to 900.
-    uint256 internal constant COLLATERAL = 1e18;
-    uint256 internal constant DEBT = 800e18;
-    uint256 internal constant START_PRICE = 1000e18;
-    uint256 internal constant DROP_PRICE = 900e18;
-    uint256 internal constant BOT_DEPOSIT = 5_000e18;
-
-    event AuctionStarted(
-        bytes32 indexed id,
-        address indexed borrower,
-        uint256 collateral,
-        uint256 debt,
-        uint256 value,
-        uint256 reservePrice,
-        uint64 commitEnd,
-        uint64 revealEnd
-    );
-    event AuctionSettled(bytes32 indexed id, address indexed winner, uint256 price, uint256 debtRepaid, uint256 refund);
-    event ClassicLiquidated(
-        address indexed borrower, address indexed liquidator, uint256 price, uint256 debtRepaid, uint256 refund
-    );
-
-    function setUp() public {
-        usd = new MockUSD();
-        weth = new MockWETH();
-        oracle = new MockOracle(START_PRICE);
-        pool = new LendingPool(usd, weth, oracle);
-        kz = new KapaliZarf(usd, weth, address(pool), 3, 3);
-        pool.setKapaliZarf(kz);
-        usd.mint(address(pool), 1_000_000e18);
-
-        _openPosition(elif);
-
-        _fundBot(botA);
-        _fundBot(botB);
-        _fundBot(botC);
-
-        usd.mint(fastBot, 10_000e18);
-        vm.startPrank(fastBot);
-        usd.approve(address(pool), type(uint256).max);
-        usd.approve(address(kz), type(uint256).max);
-        vm.stopPrank();
-    }
-
-    // ---------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------
-
-    function _openPosition(address borrower) internal {
-        weth.mint(borrower, COLLATERAL);
-        vm.startPrank(borrower);
-        weth.approve(address(pool), COLLATERAL);
-        pool.depositCollateral(COLLATERAL);
-        pool.borrow(DEBT);
-        vm.stopPrank();
-    }
-
-    function _fundBot(address bot) internal {
-        usd.mint(bot, 10_000e18);
-        vm.startPrank(bot);
-        usd.approve(address(kz), type(uint256).max);
-        kz.deposit(BOT_DEPOSIT);
-        vm.stopPrank();
-    }
-
-    function _start() internal returns (bytes32 id) {
-        oracle.setPrice(DROP_PRICE);
-        id = pool.startAuction(elif);
-    }
-
-    function _salt(address bot) internal pure returns (bytes32) {
-        return keccak256(abi.encode("salt", bot));
-    }
-
-    function _commit(address bot, bytes32 id, uint256 amount) internal {
-        bytes32 h = kz.hashBid(id, amount, _salt(bot), bot);
-        vm.prank(bot);
-        kz.commit(id, h);
-    }
-
-    function _reveal(address bot, bytes32 id, uint256 amount) internal {
-        vm.prank(bot);
-        kz.reveal(id, amount, _salt(bot));
-    }
-
-    function _toReveal(bytes32 id) internal {
-        vm.roll(kz.getAuction(id).commitEnd + 1);
-    }
-
-    function _toSettle(bytes32 id) internal {
-        vm.roll(kz.getAuction(id).revealEnd + 1);
-    }
-
+contract KapaliZarfTest is DemoBase {
     // ---------------------------------------------------------------------
     // The document's example
     // ---------------------------------------------------------------------
-
-    function test_ClassicLiquidation_ElifGets10() public {
-        oracle.setPrice(DROP_PRICE);
-        uint256 elifBefore = usd.balanceOf(elif);
-        uint256 botBefore = usd.balanceOf(fastBot);
-
-        vm.expectEmit(true, true, false, true, address(pool));
-        emit ClassicLiquidated(elif, fastBot, 810e18, DEBT, 10e18);
-        vm.prank(fastBot);
-        uint256 refund = pool.liquidateClassic(elif);
-
-        assertEq(refund, 10e18);
-        assertEq(pool.badDebt(), 0);
-        assertEq(usd.balanceOf(elif) - elifBefore, 10e18);
-        assertEq(botBefore - usd.balanceOf(fastBot), 810e18);
-        assertEq(weth.balanceOf(fastBot), COLLATERAL);
-        (uint256 collateral, uint256 debt,,,) = pool.positionOf(elif);
-        assertEq(collateral, 0);
-        assertEq(debt, 0);
-    }
-
-    /// @notice A deeper crash: the classic price (765) no longer covers the debt (800).
-    function test_ClassicBelowDebt_RecordsBadDebt() public {
-        oracle.setPrice(850e18);
-        uint256 elifBefore = usd.balanceOf(elif);
-
-        vm.prank(fastBot);
-        uint256 refund = pool.liquidateClassic(elif);
-
-        assertEq(refund, 0);
-        assertEq(usd.balanceOf(elif), elifBefore);
-        assertEq(pool.badDebt(), 35e18);
-        (, uint256 debt,,,) = pool.positionOf(elif);
-        assertEq(debt, 0);
-    }
 
     function test_SecondPriceAuction_ElifGets85() public {
         bytes32 id = _start();
@@ -201,7 +56,14 @@ contract KapaliZarfTest is Test {
         bytes32 expectedId = keccak256(abi.encode(elif, uint256(0)));
         vm.expectEmit(true, true, false, true, address(kz));
         emit AuctionStarted(
-            expectedId, elif, COLLATERAL, DEBT, DROP_PRICE, 810e18, uint64(block.number + 3), uint64(block.number + 6)
+            expectedId,
+            elif,
+            COLLATERAL,
+            DEBT,
+            DROP_PRICE,
+            810e18,
+            uint64(block.number + COMMIT_BLOCKS),
+            uint64(block.number + COMMIT_BLOCKS + REVEAL_BLOCKS)
         );
         bytes32 id = pool.startAuction(elif);
         assertEq(id, expectedId);
@@ -487,8 +349,8 @@ contract KapaliZarfTest is Test {
     function test_PhaseTransitions() public {
         bytes32 id = _start();
         KapaliZarf.Auction memory a = kz.getAuction(id);
-        assertEq(a.commitEnd, block.number + 3);
-        assertEq(a.revealEnd, block.number + 6);
+        assertEq(a.commitEnd, block.number + COMMIT_BLOCKS);
+        assertEq(a.revealEnd, block.number + COMMIT_BLOCKS + REVEAL_BLOCKS);
 
         assertEq(uint8(kz.phaseOf(id)), uint8(KapaliZarf.Phase.Commit));
         vm.roll(a.commitEnd);
@@ -632,33 +494,8 @@ contract KapaliZarfTest is Test {
     }
 
     // ---------------------------------------------------------------------
-    // Pool and access control
+    // Access control
     // ---------------------------------------------------------------------
-
-    function test_HealthyPositionCannotBeLiquidated() public {
-        assertGe(pool.healthFactor(elif), 1e18);
-        vm.expectRevert(LendingPool.NotLiquidatable.selector);
-        pool.startAuction(elif);
-        vm.prank(fastBot);
-        vm.expectRevert(LendingPool.NotLiquidatable.selector);
-        pool.liquidateClassic(elif);
-    }
-
-    function test_RevertWhen_BorrowPastThreshold() public {
-        // 1 ETH at 1000 allows 850 debt; Elif already owes 800.
-        vm.prank(elif);
-        vm.expectRevert(LendingPool.Unhealthy.selector);
-        pool.borrow(51e18);
-    }
-
-    function test_PositionInAuctionCannotBeLiquidatedAgain() public {
-        _start();
-        vm.expectRevert(LendingPool.NotLiquidatable.selector);
-        pool.startAuction(elif);
-        vm.prank(fastBot);
-        vm.expectRevert(LendingPool.NotLiquidatable.selector);
-        pool.liquidateClassic(elif);
-    }
 
     function test_TwoAuctionsRunIndependently() public {
         address deniz = makeAddr("deniz");
@@ -690,21 +527,5 @@ contract KapaliZarfTest is Test {
     function test_OnlyPoolCanOpen() public {
         vm.expectRevert(KapaliZarf.OnlyPool.selector);
         kz.open(elif, COLLATERAL, DEBT, DROP_PRICE);
-    }
-
-    function test_OnlyKapaliZarfCanRepay() public {
-        vm.expectRevert(LendingPool.OnlyKapaliZarf.selector);
-        pool.repayFromAuction(elif, DEBT);
-    }
-
-    function test_RevertWhen_SettingKapaliZarfTwice() public {
-        vm.expectRevert(LendingPool.KapaliZarfAlreadySet.selector);
-        pool.setKapaliZarf(kz);
-    }
-
-    function test_OnlyOwnerMovesOraclePrice() public {
-        vm.prank(fastBot);
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, fastBot));
-        oracle.setPrice(1e18);
     }
 }
