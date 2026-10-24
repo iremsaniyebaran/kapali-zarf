@@ -29,7 +29,17 @@ contract KapaliZarfTest is Test {
     uint256 internal constant DROP_PRICE = 900e18;
     uint256 internal constant BOT_DEPOSIT = 5_000e18;
 
-    event AuctionSettled(bytes32 indexed id, address indexed winner, uint256 price, uint256 refund);
+    event AuctionStarted(
+        bytes32 indexed id,
+        address indexed borrower,
+        uint256 collateral,
+        uint256 debt,
+        uint256 value,
+        uint256 reservePrice,
+        uint64 commitEnd,
+        uint64 revealEnd
+    );
+    event AuctionSettled(bytes32 indexed id, address indexed winner, uint256 price, uint256 debtRepaid, uint256 refund);
     event ClassicLiquidated(
         address indexed borrower, address indexed liquidator, uint256 price, uint256 debtRepaid, uint256 refund
     );
@@ -87,7 +97,7 @@ contract KapaliZarfTest is Test {
     }
 
     function _commit(address bot, bytes32 id, uint256 amount) internal {
-        bytes32 h = kz.commitHashOf(id, amount, _salt(bot), bot);
+        bytes32 h = kz.hashBid(id, amount, _salt(bot), bot);
         vm.prank(bot);
         kz.commit(id, h);
     }
@@ -160,12 +170,13 @@ contract KapaliZarfTest is Test {
         uint256 poolBefore = usd.balanceOf(address(pool));
 
         vm.expectEmit(true, true, false, true, address(kz));
-        emit AuctionSettled(id, botA, 885e18, 85e18);
+        emit AuctionSettled(id, botA, 885e18, DEBT, 85e18);
         kz.settle(id);
 
         KapaliZarf.Auction memory a = kz.getAuction(id);
         assertEq(a.winner, botA);
         assertEq(a.price, 885e18);
+        assertEq(a.debtRepaid, DEBT);
         assertEq(a.refund, 85e18);
         assertEq(usd.balanceOf(elif) - elifBefore, 85e18);
         assertEq(usd.balanceOf(address(pool)) - poolBefore, DEBT);
@@ -187,7 +198,13 @@ contract KapaliZarfTest is Test {
     function test_ReserveEqualsClassicPrice() public {
         oracle.setPrice(DROP_PRICE);
         uint256 classic = pool.classicPrice(elif);
+        bytes32 expectedId = keccak256(abi.encode(elif, uint256(0)));
+        vm.expectEmit(true, true, false, true, address(kz));
+        emit AuctionStarted(
+            expectedId, elif, COLLATERAL, DEBT, DROP_PRICE, 810e18, uint64(block.number + 3), uint64(block.number + 6)
+        );
         bytes32 id = pool.startAuction(elif);
+        assertEq(id, expectedId);
         KapaliZarf.Auction memory a = kz.getAuction(id);
         assertEq(a.reservePrice, classic);
         assertEq(a.reservePrice, 810e18);
@@ -381,7 +398,7 @@ contract KapaliZarfTest is Test {
 
     function test_RevertWhen_CopyingAnotherBiddersCommit() public {
         bytes32 id = _start();
-        bytes32 hashA = kz.commitHashOf(id, 890e18, _salt(botA), botA);
+        bytes32 hashA = kz.hashBid(id, 890e18, _salt(botA), botA);
         vm.prank(botA);
         kz.commit(id, hashA);
         vm.prank(botB);
@@ -451,7 +468,7 @@ contract KapaliZarfTest is Test {
     function test_RevertWhen_CommitAfterWindow() public {
         bytes32 id = _start();
         _toReveal(id);
-        bytes32 h = kz.commitHashOf(id, 890e18, _salt(botA), botA);
+        bytes32 h = kz.hashBid(id, 890e18, _salt(botA), botA);
         vm.prank(botA);
         vm.expectRevert(KapaliZarf.CommitClosed.selector);
         kz.commit(id, h);
@@ -493,7 +510,7 @@ contract KapaliZarfTest is Test {
     function test_RevertWhen_DoubleCommitOrReveal() public {
         bytes32 id = _start();
         _commit(botA, id, 890e18);
-        bytes32 h = kz.commitHashOf(id, 880e18, _salt(botA), botA);
+        bytes32 h = kz.hashBid(id, 880e18, _salt(botA), botA);
         vm.prank(botA);
         vm.expectRevert(KapaliZarf.AlreadyCommitted.selector);
         kz.commit(id, h);
@@ -535,7 +552,7 @@ contract KapaliZarfTest is Test {
         vm.stopPrank();
 
         bytes32 id = _start();
-        bytes32 h = kz.commitHashOf(id, 890e18, _salt(poorBot), poorBot);
+        bytes32 h = kz.hashBid(id, 890e18, _salt(poorBot), poorBot);
         vm.prank(poorBot);
         vm.expectRevert(KapaliZarf.InsufficientFreeBalance.selector);
         kz.commit(id, h);
@@ -550,7 +567,7 @@ contract KapaliZarfTest is Test {
         }
         address extra = makeAddr("extra");
         _fundBot(extra);
-        bytes32 h = kz.commitHashOf(id, 880e18, _salt(extra), extra);
+        bytes32 h = kz.hashBid(id, 880e18, _salt(extra), extra);
         vm.prank(extra);
         vm.expectRevert(KapaliZarf.TooManyBidders.selector);
         kz.commit(id, h);

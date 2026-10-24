@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Split} from "./Split.sol";
 
 interface ILiquidationPool {
     function repayFromAuction(address borrower, uint256 amount) external;
@@ -57,6 +58,7 @@ contract KapaliZarf is ReentrancyGuard {
         uint256 secondBid;
         address winner;
         uint256 price;
+        uint256 debtRepaid;
         uint256 refund;
     }
 
@@ -89,14 +91,14 @@ contract KapaliZarf is ReentrancyGuard {
         address indexed borrower,
         uint256 collateral,
         uint256 debt,
+        uint256 value,
         uint256 reservePrice,
-        uint256 bidCap,
         uint64 commitEnd,
         uint64 revealEnd
     );
     event BidCommitted(bytes32 indexed id, address indexed bidder);
     event BidRevealed(bytes32 indexed id, address indexed bidder, uint256 amount);
-    event AuctionSettled(bytes32 indexed id, address indexed winner, uint256 price, uint256 refund);
+    event AuctionSettled(bytes32 indexed id, address indexed winner, uint256 price, uint256 debtRepaid, uint256 refund);
     event NoBids(bytes32 indexed id);
     event FallbackLiquidated(bytes32 indexed id, address indexed liquidator, uint256 price, uint256 refund);
 
@@ -184,7 +186,7 @@ contract KapaliZarf is ReentrancyGuard {
         a.status = Status.Active;
 
         latestAuctionOf[borrower] = id;
-        emit AuctionStarted(id, borrower, collateral, debt, a.reservePrice, value, commitEnd, revealEnd);
+        emit AuctionStarted(id, borrower, collateral, debt, value, a.reservePrice, commitEnd, revealEnd);
     }
 
     /// @notice Sealed bid. Locks `bidCap` so the locked amount says nothing about the bid itself.
@@ -215,7 +217,7 @@ contract KapaliZarf is ReentrancyGuard {
         Bid storage b = bids[id][msg.sender];
         if (b.commitHash == bytes32(0)) revert NoCommit();
         if (b.revealed) revert AlreadyRevealed();
-        if (commitHashOf(id, amount, salt, msg.sender) != b.commitHash) revert BadReveal();
+        if (hashBid(id, amount, salt, msg.sender) != b.commitHash) revert BadReveal();
         if (amount < a.reservePrice || amount > a.bidCap) revert BidOutOfRange();
 
         b.revealed = true;
@@ -249,15 +251,15 @@ contract KapaliZarf is ReentrancyGuard {
 
         address winner = a.highBidder;
         uint256 price = a.secondBid > a.reservePrice ? a.secondBid : a.reservePrice;
-        uint256 repaid = price < a.debt ? price : a.debt;
-        uint256 refund = price - repaid;
+        (uint256 repaid, uint256 refund) = Split.split(price, a.debt);
 
         balanceOf[winner] -= price;
         a.status = Status.Settled;
         a.winner = winner;
         a.price = price;
+        a.debtRepaid = repaid;
         a.refund = refund;
-        emit AuctionSettled(id, winner, price, refund);
+        emit AuctionSettled(id, winner, price, repaid, refund);
 
         usd.safeTransfer(pool, repaid);
         ILiquidationPool(pool).repayFromAuction(a.borrower, repaid);
@@ -272,12 +274,12 @@ contract KapaliZarf is ReentrancyGuard {
         if (a.status != Status.AwaitingFallback) revert NotAwaitingFallback();
 
         uint256 price = a.reservePrice;
-        uint256 repaid = price < a.debt ? price : a.debt;
-        uint256 refund = price - repaid;
+        (uint256 repaid, uint256 refund) = Split.split(price, a.debt);
 
         a.status = Status.FallbackLiquidated;
         a.winner = msg.sender;
         a.price = price;
+        a.debtRepaid = repaid;
         a.refund = refund;
         emit FallbackLiquidated(id, msg.sender, price, refund);
 
@@ -297,7 +299,8 @@ contract KapaliZarf is ReentrancyGuard {
     // Views
     // ---------------------------------------------------------------------
 
-    function commitHashOf(bytes32 id, uint256 amount, bytes32 salt, address bidder) public pure returns (bytes32) {
+    /// @notice Public so off-chain bidders can check their own encoding against the contract once.
+    function hashBid(bytes32 id, uint256 amount, bytes32 salt, address bidder) public pure returns (bytes32) {
         return keccak256(abi.encode(id, amount, salt, bidder));
     }
 
