@@ -161,6 +161,7 @@ event FallbackLiquidated(bytes32 indexed id, address indexed liquidator, uint256
 | `DROP_PORT` | 8787 | Sahne uç noktası |
 | `DROP_PRICE` | 900 | `/drop` ve `npm run drop`'un varsayılan fiyatı |
 | `PRIORITY_GWEI` | 2 | Fee: son base fee × 2 + bu tip |
+| `RPC_RPS` | 12 | Süreç başına HTTP istek sınırı; public uç 15/sn'de "requests limited" döner |
 | `EXPLORER_TX_URL` | `https://testnet.monadvision.com/tx/` | Loglardaki işlem linkleri |
 | `MIN_GAS_MON`, `GAS_TOPUP_MON` | 1, 1,5 | Bu bakiyenin altındaki cüzdana bu kadar MON gönderilir |
 | `OWNER_RESERVE_MON` | 10 | Owner'ın altına düşmeyeceği MON bakiyesi |

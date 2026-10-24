@@ -66,20 +66,53 @@ const CONTRACTS = {
   kz: ["KapaliZarf", "zarf"],
 };
 
+// The public Monad RPC answers "requests limited to 15/sec". All HTTP calls of the process share one
+// token bucket (bursts up to RPC_RPS, refilled at RPC_RPS per second) and rate-limit answers are retried.
+const RPC_RPS = Number(process.env.RPC_RPS ?? 12);
+const bucket = { tokens: RPC_RPS, at: Date.now() };
+
+async function takeToken() {
+  for (;;) {
+    const now = Date.now();
+    bucket.tokens = Math.min(RPC_RPS, bucket.tokens + ((now - bucket.at) / 1000) * RPC_RPS);
+    bucket.at = now;
+    if (bucket.tokens >= 1) {
+      bucket.tokens -= 1;
+      return;
+    }
+    await sleep(((1 - bucket.tokens) / RPC_RPS) * 1000);
+  }
+}
+
+async function limitedFetch(input, init) {
+  for (let attempt = 1; ; attempt++) {
+    await takeToken();
+    const res = await fetch(input, init);
+    const limited = res.status === 429 || /limited to|rate limit/i.test(await res.clone().text());
+    if (!limited || attempt >= 6) return res;
+    await sleep(300 * attempt);
+  }
+}
+
+const transport = () => http(RPC_URL, { fetchFn: limitedFetch });
+// Errors worth sending again after a pause: rate limits, and a balance the RPC has not caught up
+// with yet (Monad checks the state of a few blocks ago, so a wallet funded just now can look empty).
+const TRANSIENT = /limited to|rate limit|429|insufficient balance/i;
+
 export const addressesPath = (chainId) =>
   path.join(ROOT, "shared", chainId === MONAD_TESTNET ? "addresses.json" : `addresses.${chainId}.json`);
 
 export async function setup() {
   if (!RPC_URL) fail("RPC_URL ya da MONAD_TESTNET_RPC .env'de tanımlı değil.");
 
-  const chainId = await createPublicClient({ transport: http(RPC_URL) }).getChainId();
+  const chainId = await createPublicClient({ transport: transport() }).getChainId();
   const chain = defineChain({
     id: chainId,
     name: chainId === MONAD_TESTNET ? "Monad Testnet" : `Chain ${chainId}`,
     nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
     rpcUrls: { default: { http: [RPC_URL] } },
   });
-  const publicClient = createPublicClient({ chain, transport: http(RPC_URL), pollingInterval: 100 });
+  const publicClient = createPublicClient({ chain, transport: transport(), pollingInterval: 100 });
 
   const file = addressesPath(chainId);
   if (!fs.existsSync(file)) fail(`${path.relative(ROOT, file)} yok. Önce npm run deploy çalıştırın.`);
@@ -98,7 +131,7 @@ export async function setup() {
     if (!raw) fail(`${envKey} .env'de yok. npm run wallets ile oluşturun.`);
     const account = privateKeyToAccount(raw.startsWith("0x") ? raw : `0x${raw}`);
     accounts[role] = account;
-    wallets[role] = createWalletClient({ account, chain, transport: http(RPC_URL) });
+    wallets[role] = createWalletClient({ account, chain, transport: transport() });
     addresses[role] = account.address;
   }
 
@@ -124,16 +157,19 @@ export function read(ctx, contract, functionName, args = []) {
 /// For setup work (reset, drop); the bots use createSender, which never waits.
 export async function send(ctx, role, contract, functionName, args, gas) {
   const wallet = ctx.wallets[role];
-  const hash = await wallet.writeContract({
-    address: contract.address,
-    abi: contract.abi,
-    functionName,
-    args,
-    gas,
-    account: wallet.account,
-    chain: ctx.chain,
-  });
-  const receipt = await ctx.publicClient.waitForTransactionReceipt({ hash, pollingInterval: 100 });
+  const write = () =>
+    wallet.writeContract({
+      address: contract.address,
+      abi: contract.abi,
+      functionName,
+      args,
+      gas,
+      account: wallet.account,
+      chain: ctx.chain,
+    });
+  const hash = await retryTransient(write, `${role} ${functionName}`);
+  // Setup work runs several wallets in parallel; a slower receipt poll keeps them under the RPC limit.
+  const receipt = await ctx.publicClient.waitForTransactionReceipt({ hash, pollingInterval: 500 });
   if (receipt.status !== "success") throw new Error(`${role} ${functionName} revert etti: ${txLink(hash)}`);
   const events = parseEventLogs({ abi: contract.abi, logs: receipt.logs });
   return { hash, receipt, events };
@@ -180,8 +216,21 @@ export async function createSender(ctx, role, fees) {
   return sender;
 }
 
+export async function retryTransient(fn, what, attempts = 5) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const message = `${err.details ?? ""} ${err.shortMessage ?? err.message}`;
+      if (i >= attempts || !TRANSIENT.test(message)) throw err;
+      log(`${what}: ${err.details ?? err.shortMessage}, ${i}. tekrar`);
+      await sleep(1000 * i);
+    }
+  }
+}
+
 export async function waitForBlock(ctx, target) {
-  while ((await ctx.publicClient.getBlockNumber()) < target) await sleep(100);
+  while ((await ctx.publicClient.getBlockNumber()) < target) await sleep(300);
 }
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -53,7 +53,7 @@ export async function reset(ctx, { quiet = false } = {}) {
         continue;
       }
       const hash = await ctx.wallets.owner.sendTransaction({ to: addr[role], value: TOPUP, account: ctx.accounts.owner, chain: ctx.chain });
-      await publicClient.waitForTransactionReceipt({ hash });
+      await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 500 });
       say(`${role} cüzdanına ${fmt(TOPUP)} MON gönderildi`);
     }
   };
