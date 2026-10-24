@@ -327,6 +327,32 @@ contract KapaliZarfTest is Test {
         assertEq(usd.balanceOf(address(kz)), kz.balanceOf(botA) + kz.balanceOf(botB) + kz.balanceOf(botC));
     }
 
+    /// @notice Deeper crash on the auction side: even the best price leaves part of the debt open.
+    /// settle must still go through; the shortfall is the pool's bad debt.
+    function test_SettleBelowDebt_NeverReverts() public {
+        oracle.setPrice(850e18); // value 850, reserve 765, debt 800
+        bytes32 id = pool.startAuction(elif);
+        _commit(botA, id, 790e18);
+        _commit(botB, id, 780e18);
+        _toReveal(id);
+        _reveal(botA, id, 790e18);
+        _reveal(botB, id, 780e18);
+        _toSettle(id);
+        uint256 elifBefore = usd.balanceOf(elif);
+        kz.settle(id);
+
+        KapaliZarf.Auction memory a = kz.getAuction(id);
+        assertEq(a.winner, botA);
+        assertEq(a.price, 780e18);
+        assertEq(a.debtRepaid, 780e18);
+        assertEq(a.refund, 0);
+        assertEq(usd.balanceOf(elif), elifBefore);
+        assertEq(pool.badDebt(), 20e18);
+        (, uint256 debt, bool inAuction,,) = pool.positionOf(elif);
+        assertEq(debt, 0);
+        assertFalse(inAuction);
+    }
+
     // ---------------------------------------------------------------------
     // Fallback
     // ---------------------------------------------------------------------
@@ -378,6 +404,16 @@ contract KapaliZarfTest is Test {
     // ---------------------------------------------------------------------
     // Sealed bids
     // ---------------------------------------------------------------------
+
+    /// @notice Same inputs hashed by viem in the bots:
+    /// keccak256(encodeAbiParameters(parseAbiParameters("bytes32, uint256, bytes32, address"), [...]))
+    function test_HashMatchesOffchain() public view {
+        bytes32 id = bytes32(0x1111111111111111111111111111111111111111111111111111111111111111);
+        bytes32 salt = bytes32(0x2222222222222222222222222222222222222222222222222222222222222222);
+        address bidder = 0x00000000000000000000000000000000DeaDBeef;
+        bytes32 viemHash = 0xf10079ca19d9a55e3271c4b420e66c34ac91317a2aac376c6a3d7bf6c747e5a3;
+        assertEq(kz.hashBid(id, 890e18, salt, bidder), viemHash);
+    }
 
     function test_RevertWhen_WrongSalt() public {
         bytes32 id = _start();
