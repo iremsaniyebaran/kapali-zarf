@@ -44,3 +44,31 @@ export function createPlayer(dispatch: (e: StageEvent) => void) {
     },
   }
 }
+
+/** One step of a script: wait `after` ms since the previous step, then play `ev`. */
+export interface Step {
+  after: number
+  ev: ChainEvent
+}
+
+/** Plays a script in real time (speed 1) or slowed down, with a head tick on every block so the
+ * countdowns move. Returns a function that stops it. */
+export function playScript(script: Step[], dispatch: (e: StageEvent) => void, { blockMs, speed = 1 }: { blockMs: number; speed?: number }) {
+  const player = createPlayer(dispatch)
+  const timers: ReturnType<typeof setTimeout>[] = []
+  if (script.length === 0) return () => {}
+  const first = script[0].ev.block
+  const last = script.reduce((b, s) => (s.ev.block > b ? s.ev.block : b), first)
+  let t = 0
+  for (const step of script) {
+    t += step.after * speed
+    timers.push(setTimeout(() => player.push(step.ev), t))
+  }
+  for (let block = first; block <= last + 1n; block++) {
+    timers.push(setTimeout(() => player.push({ type: 'Head', block }), Number(block - first) * blockMs * speed))
+  }
+  return () => {
+    timers.forEach(clearTimeout)
+    player.stop()
+  }
+}

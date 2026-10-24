@@ -1,37 +1,65 @@
-import { useEffect, useMemo, useRef } from 'react'
-import type { Hash } from 'viem'
+import { useEffect, useRef } from 'react'
+import type { Address, Hash } from 'viem'
 import { BLOCK_SECONDS, DEMO } from '../config'
 import { DEMO_POSITION, ONE, type ChainEvent, type StageEvent } from '../stage'
-import { createPlayer } from './player'
+import { addressOf, bidOf, DEBT, DEFAULT_SCENARIO, dropPriceOf, liquidatableAt, reserveOf, sameScenario, START_PRICE, type Scenario } from '../scenario'
+import { playScript, type Step } from './player'
 
-/** One step of a script: wait `after` ms since the previous step, then play `ev`. */
-export interface Step {
-  after: number
-  ev: ChainEvent
-}
+export type { Step }
 
 const BLOCK_MS = BLOCK_SECONDS * 1000
 const BASE = 1_000n
-const ID = '0x215be5d2c8a54d1f3b6a3f4f0f1c2b9a8e7d6c5b4a39281706f5e4d3c2b1a090' as Hash
 const usd = (n: number) => BigInt(n) * ONE
 
-/** The document's numbers: ETH 1000 → 900, bids 890 / 885 / 870, 8 + 8 block windows. */
-function defaultScript(): Step[] {
+/** The round the contracts would produce for `scenario`: same pricing, same tie rule (first reveal
+ * wins), same split of the price between the debt and Elif. Used by ?mock=1. */
+export function buildScript(scenario: Scenario, auctionNonce = 0): Step[] {
+  const value = dropPriceOf(scenario.dropPct)
+  const reserve = reserveOf(value)
   const commitEnd = BASE + 1n + BigInt(DEMO.commitBlocks)
   const revealEnd = commitEnd + BigInt(DEMO.revealBlocks)
-  const { a, b, c, fast } = DEMO.bots
-  const at: [bigint, ChainEvent][] = [
-    [BASE, { type: 'PriceUpdated', block: BASE, price: usd(900) }],
-    [BASE + 1n, { type: 'ClassicLiquidated', block: BASE + 1n, borrower: DEMO.elifKlasik, liquidator: fast, price: usd(810), debtRepaid: usd(800), refund: usd(10) }],
-    [BASE + 1n, { type: 'AuctionStarted', block: BASE + 1n, id: ID, borrower: DEMO.elifZarf, collateral: ONE, debt: usd(800), value: usd(900), reservePrice: usd(810), commitEnd, revealEnd }],
-    [BASE + 2n, { type: 'BidCommitted', block: BASE + 2n, id: ID, bidder: b }],
-    [BASE + 2n, { type: 'BidCommitted', block: BASE + 2n, id: ID, bidder: a }],
-    [BASE + 2n, { type: 'BidCommitted', block: BASE + 2n, id: ID, bidder: c }],
-    [commitEnd + 1n, { type: 'BidRevealed', block: commitEnd + 1n, id: ID, bidder: a, amount: usd(890) }],
-    [commitEnd + 1n, { type: 'BidRevealed', block: commitEnd + 1n, id: ID, bidder: b, amount: usd(885) }],
-    [commitEnd + 1n, { type: 'BidRevealed', block: commitEnd + 1n, id: ID, bidder: c, amount: usd(870) }],
-    [revealEnd + 1n, { type: 'AuctionSettled', block: revealEnd + 1n, id: ID, winner: a, price: usd(885), debtRepaid: usd(800), refund: usd(85) }],
-  ]
+  const id = `0x${(0x215be5d2 + auctionNonce).toString(16).padStart(8, '0')}${'0'.repeat(56)}` as Hash
+  const split = (price: number) => ({ repaid: Math.min(price, DEBT), refund: Math.max(0, price - DEBT) })
+
+  const at: [bigint, ChainEvent][] = [[BASE, { type: 'PriceUpdated', block: BASE, price: usd(value) }]]
+  if (!liquidatableAt(value)) return toSteps(at)
+
+  const classic = split(reserve)
+  at.push([BASE + 1n, { type: 'ClassicLiquidated', block: BASE + 1n, borrower: DEMO.elifKlasik, liquidator: DEMO.bots.fast, price: usd(reserve), debtRepaid: usd(classic.repaid), refund: usd(classic.refund) }])
+  at.push([BASE + 1n, { type: 'AuctionStarted', block: BASE + 1n, id, borrower: DEMO.elifZarf, collateral: ONE, debt: usd(DEBT), value: usd(value), reservePrice: usd(reserve), commitEnd, revealEnd }])
+
+  const bids: { bidder: Address; amount: number }[] = scenario.bidders
+    .filter((b) => b.enabled)
+    .map((b) => ({ bidder: addressOf(b.role), amount: bidOf(value, b.marginBps) }))
+    .filter((b) => b.amount >= reserve)
+  if (scenario.guest !== null && scenario.guest >= reserve && scenario.guest <= value) bids.push({ bidder: addressOf('guest'), amount: scenario.guest })
+
+  for (const b of bids) at.push([BASE + 2n, { type: 'BidCommitted', block: BASE + 2n, id, bidder: b.bidder }])
+  for (const b of bids) at.push([commitEnd + 1n, { type: 'BidRevealed', block: commitEnd + 1n, id, bidder: b.bidder, amount: usd(b.amount) }])
+
+  const settle = revealEnd + 1n
+  if (bids.length === 0) {
+    at.push([settle, { type: 'NoBids', block: settle, id }])
+    const fb = split(reserve)
+    at.push([settle + 1n, { type: 'FallbackLiquidated', block: settle + 1n, id, liquidator: DEMO.bots.c, price: usd(reserve), refund: usd(fb.refund) }])
+    return toSteps(at)
+  }
+  // Highest wins; on a tie the earlier reveal keeps the lead. The winner pays the second price.
+  let best = bids[0]
+  let second = 0
+  for (const b of bids.slice(1)) {
+    if (b.amount > best.amount) {
+      second = best.amount
+      best = b
+    } else if (b.amount > second) second = b.amount
+  }
+  const price = Math.max(second, reserve)
+  const result = split(price)
+  at.push([settle, { type: 'AuctionSettled', block: settle, id, winner: best.bidder, price: usd(price), debtRepaid: usd(result.repaid), refund: usd(result.refund) }])
+  return toSteps(at)
+}
+
+function toSteps(at: [bigint, ChainEvent][]): Step[] {
   let prev = 0
   return at.map(([block, ev]) => {
     const t = Number(block - BASE) * BLOCK_MS
@@ -41,50 +69,39 @@ function defaultScript(): Step[] {
   })
 }
 
-// A script recorded from a real rehearsal (press K on the live page) replaces the default one.
+// A script recorded from a real rehearsal (press K on the live page) replaces the default round.
 const recorded = import.meta.glob<Step[]>('./recorded.json', { eager: true, import: 'default' })['./recorded.json']
 
-export function mockScript(): Step[] {
-  if (!recorded) return defaultScript()
-  return recorded.map((s) => ({ after: s.after, ev: reviveBigInts(s.ev) as ChainEvent }))
+export function mockScript(scenario: Scenario, nonce = 0): Step[] {
+  if (recorded && sameScenario(scenario, DEFAULT_SCENARIO)) {
+    return recorded.map((s) => ({ after: s.after, ev: reviveBigInts(s.ev) as ChainEvent }))
+  }
+  return buildScript(scenario, nonce)
 }
 
-/** Plays the script when the stage button is pressed; heads tick every block meanwhile. */
+/** Plays the scenario when the stage button is pressed; heads tick every block meanwhile. */
 export function useMockFeed(dispatch: (e: StageEvent) => void, enabled: boolean) {
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
-  const player = useMemo(() => createPlayer(dispatch), [dispatch])
-
-  const clear = () => {
-    timers.current.forEach(clearTimeout)
-    timers.current = []
-  }
+  const stop = useRef<() => void>(() => {})
+  const rounds = useRef(0)
 
   const reset = () => {
-    clear()
-    dispatch({ type: 'Reset', price: usd(1000) })
-    dispatch({ type: 'Snapshot', price: usd(1000), klasik: DEMO_POSITION, zarf: DEMO_POSITION })
+    stop.current()
+    dispatch({ type: 'Reset', price: usd(START_PRICE) })
+    dispatch({ type: 'Snapshot', price: usd(START_PRICE), klasik: DEMO_POSITION, zarf: DEMO_POSITION })
   }
 
-  const trigger = () => {
+  /** Returns the script it plays, so the round can be kept for the history and replayed. */
+  const trigger = (scenario: Scenario): Step[] => {
     reset()
-    const script = mockScript()
-    const first = script[0]?.ev.block ?? BASE
-    const last = script.reduce((b, s) => (s.ev.block > b ? s.ev.block : b), first)
-    let t = 0
-    for (const step of script) {
-      t += step.after
-      timers.current.push(setTimeout(() => player.push(step.ev), t))
-    }
-    for (let block = first; block <= last + 1n; block++) {
-      const at = Number(block - first) * BLOCK_MS
-      timers.current.push(setTimeout(() => player.push({ type: 'Head', block }), at))
-    }
+    const script = mockScript(scenario, rounds.current++)
+    stop.current = playScript(script, dispatch, { blockMs: BLOCK_MS })
+    return script
   }
 
   useEffect(() => {
     if (!enabled) return
     reset()
-    return clear
+    return () => stop.current()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled])
 

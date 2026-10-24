@@ -14,7 +14,7 @@ export interface Addresses {
   owner: Address
   elifKlasik: Address
   elifZarf: Address
-  bots: { a: Address; b: Address; c: Address; fast: Address }
+  bots: { a: Address; b: Address; c: Address; fast: Address; guest?: Address }
   commitBlocks: number
   revealBlocks: number
   deployBlock: number
@@ -59,6 +59,7 @@ const MOCK_ADDRESSES: Addresses = {
     b: '0x00000000000000000000000000000000000000bb',
     c: '0x00000000000000000000000000000000000000bc',
     fast: '0x00000000000000000000000000000000000000f0',
+    guest: '0x00000000000000000000000000000000000000ee',
   },
   commitBlocks: 8,
   revealBlocks: 8,
@@ -66,6 +67,9 @@ const MOCK_ADDRESSES: Addresses = {
 }
 
 export const DEMO = ADDRESSES ?? MOCK_ADDRESSES
+/** The presenter's bidder ("Sen"). An address file from before the guest wallet existed has none;
+ * npm run reset adds it. Mock rounds then use the placeholder. */
+export const GUEST: Address = DEMO.bots.guest ?? MOCK_ADDRESSES.bots.guest!
 
 export function nameOf(address: Address | undefined): string {
   if (!address) return '?'
@@ -75,6 +79,7 @@ export function nameOf(address: Address | undefined): string {
     [DEMO.bots.b, 'Bot B'],
     [DEMO.bots.c, 'Bot C'],
     [DEMO.bots.fast, 'Hızlı Bot'],
+    [GUEST, 'Sen'],
     [DEMO.elifKlasik, 'Elif'],
     [DEMO.elifZarf, 'Elif'],
   ]

@@ -55,7 +55,7 @@ export interface AuctionView {
   tx?: Hash
   bids: Bid[]
   noBids: boolean
-  result?: { kind: 'settled' | 'fallback'; winner: Address; price: bigint; refund: bigint; block: bigint; tx?: Hash }
+  result?: { kind: 'settled' | 'fallback'; winner: Address; price: bigint; debtRepaid: bigint; refund: bigint; block: bigint; tx?: Hash }
 }
 
 export interface StageState {
@@ -64,8 +64,10 @@ export interface StageState {
   klasik: Position & { refund?: bigint }
   zarf: Position & { refund?: bigint }
   drop?: { block: bigint; tx?: Hash; from: bigint }
-  classic?: { liquidator: Address; price: bigint; refund: bigint; block: bigint; tx?: Hash }
+  classic?: { liquidator: Address; price: bigint; debt: bigint; debtRepaid: bigint; refund: bigint; block: bigint; tx?: Hash }
   auction?: AuctionView
+  /** This round's events, newest last, for the live feed. */
+  feed: ChainEvent[]
 }
 
 export const ONE = 10n ** 18n
@@ -77,9 +79,18 @@ export const initialStage: StageState = {
   head: 0n,
   klasik: DEMO_POSITION,
   zarf: DEMO_POSITION,
+  feed: [],
 }
 
+const FEED_LIMIT = 40
+
 export function reduce(s: StageState, e: StageEvent): StageState {
+  const next = apply(s, e)
+  if (e.type === 'Head' || e.type === 'Snapshot' || e.type === 'Reset' || next === s) return next
+  return { ...next, feed: [...next.feed, e].slice(-FEED_LIMIT) }
+}
+
+function apply(s: StageState, e: StageEvent): StageState {
   switch (e.type) {
     case 'Head':
       return e.block > s.head ? { ...s, head: e.block } : s
@@ -104,7 +115,7 @@ export function reduce(s: StageState, e: StageEvent): StageState {
       return {
         ...s,
         klasik: { collateral: 0n, debt: 0n, refund: e.refund },
-        classic: { liquidator: e.liquidator, price: e.price, refund: e.refund, block: e.block, tx: e.tx },
+        classic: { liquidator: e.liquidator, price: e.price, debt: s.klasik.debt, debtRepaid: e.debtRepaid, refund: e.refund, block: e.block, tx: e.tx },
       }
     case 'AuctionStarted':
       return {
@@ -142,7 +153,7 @@ export function reduce(s: StageState, e: StageEvent): StageState {
       return {
         ...s,
         zarf: { collateral: 0n, debt: 0n, refund: e.refund },
-        auction: { ...a, result: { kind: 'settled', winner: e.winner, price: e.price, refund: e.refund, block: e.block, tx: e.tx } },
+        auction: { ...a, result: { kind: 'settled', winner: e.winner, price: e.price, debtRepaid: e.debtRepaid, refund: e.refund, block: e.block, tx: e.tx } },
       }
     }
     case 'NoBids':
@@ -155,7 +166,7 @@ export function reduce(s: StageState, e: StageEvent): StageState {
       return {
         ...s,
         zarf: { collateral: 0n, debt: 0n, refund: e.refund },
-        auction: { ...a, result: { kind: 'fallback', winner: e.liquidator, price: e.price, refund: e.refund, block: e.block, tx: e.tx } },
+        auction: { ...a, result: { kind: 'fallback', winner: e.liquidator, price: e.price, debtRepaid: e.price - e.refund, refund: e.refund, block: e.block, tx: e.tx } },
       }
     }
   }
