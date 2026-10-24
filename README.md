@@ -11,9 +11,9 @@ kapalı zarf (Vickrey) likidasyon açık artırması. Monad Blitz Ankara v4.
 | `test/` | `LendingPool.t.sol`, `KapaliZarf.t.sol` (ortak kurulum `Base.t.sol`), 39 test, fuzz dahil |
 | `script/Deploy.s.sol` | Beş kontratı deploy eder, `shared/addresses.json` yazar |
 | `shared/` | A ile B arasındaki tek sözleşme: `addresses.json` ve `abi/` |
-| `bots/wallets.mjs` | Altı demo cüzdanını üretip `.env`'e ekler |
+| `bots/wallets.mjs` | Yedi demo cüzdanını (iki Elif, dört bot, "Sen") üretip `.env`'e ekler |
 | `bots/reset.mjs` | Demoyu başlangıç durumuna getirir; her provadan önce |
-| `bots/bots.mjs` | Bot A, B, C ve Hızlı Bot; aynı süreçte `localhost:8787` (`/health`, `/drop`, `/reset`) |
+| `bots/bots.mjs` | Bot A, B, C, Hızlı Bot ve "Sen"; aynı süreçte `localhost:8787` (`/health`, `/drop`, `/reset`, `/config`, `/bid`) |
 | `bots/ws.mjs` | `monadLogs` / `monadNewHeads` aboneliği, düşerse HTTP yoklama |
 | `bots/drop.mjs` | Fiyatı düşürür (sahnedeki butonun terminal yedeği) |
 | `web/` | Sahne sayfası (Vite + React + viem + framer-motion) |
@@ -36,7 +36,7 @@ forge test
 2. `DEPLOYER_PK` (OWNER): faucet'ten MON aldığınız cüzdan. Kontratların sahibi olur, fiyatı değiştirir ve
    diğer cüzdanlara gas için MON gönderir. Monad, bakiyeyi yaklaşık 10 MON'un altına düşüren MON
    transferlerini geri çevirebilir; bu cüzdanda en az 15 MON tutun.
-3. Altı demo cüzdanı (`reset` her birine en az 1 MON koyar):
+3. Yedi demo cüzdanı (`reset` her birine en az 1 MON koyar):
 
 ```bash
 npm run wallets
@@ -123,8 +123,21 @@ Ekrandaki her rakam event'ten gelir: fark = `AuctionSettled.refund − ClassicLi
 blok farkı × 0,31 sn (testnet'te ölçülen blok süresi; `VITE_BLOCK_SECONDS` ile değişir). Aynı bloka düşen event'ler 350 ms arayla oynatılır. Sayfa yenilenirse son 300
 bloğun logları ve `positionOf` okumalarıyla durum geri gelir.
 
-Tuşlar: `Boşluk` fiyat düşüşü, `R` reset, `K` son canlı turu `recorded.json` olarak indirir. Bu dosya
-`web/src/feeds/recorded.json` olarak kaydedilirse `?mock=1` gerçek provanın birebir kopyasını oynatır.
+**Kontrol paneli** (sağda, `P` ile aç/kapa). Canlı modda ayarlar bot sürecine gider, mock modda
+aynı kurallarla yerelde hesaplanır:
+
+| Bölüm | Ne yapar |
+| --- | --- |
+| Senaryo | Düşüş %7 / %10 / %15 / %20 (930 / 900 / 850 / 800 $). %15 ve %20'de klasik fiyat borcu karşılamaz; alt şerit havuzun kötü borcunu da karşılaştırır. Reset butonu. |
+| Botların stratejisi | Her botun marjı (%0–10) ve aç/kapa; teklifin kaç dolar olacağı yanında görünür. Hepsi kapalıysa tur teklifsiz kalır ve yedek yol oynar. Sonraki açık artırmadan itibaren geçerli (`POST /config`). |
+| Sen de teklif ver | Taban–tavan arasında bir tutar seçip "Mühürle": fiyat düşünce `GUEST_PK` cüzdanından botlarla birlikte mühürlenir, ekranda "Sen" zarfı olarak açılır. Tek seferlik (`POST /bid`). |
+| Canlı akış / Geçmiş | Turun bütün event'leri blok numarası ve explorer linkiyle; biten turların tablosu. ▶ bir turu ×2,5 yavaş çekimde tekrar oynatır (`Esc` canlıya döner). Geçmiş tarayıcıda saklanır. |
+
+Terimlerin (sağlık oranı, taban, tavan, mühürlü, ikinci fiyat, kötü borç) üzerine gelince açıklama çıkar.
+
+Tuşlar: `Boşluk` fiyat düşüşü, `R` reset, `P` panel, `Esc` tekrardan çık, `K` son canlı turu
+`recorded.json` olarak indirir. Bu dosya `web/src/feeds/recorded.json` olarak kaydedilirse `?mock=1`
+varsayılan senaryoda gerçek provanın birebir kopyasını oynatır.
 
 Vercel: proje kökü `web/`, build `npm run build`, çıktı `dist`. Yine de sahnede sayfayı yerelden açın;
 HTTPS sayfanın `localhost`'a erişmesi tarayıcı ayarına bağlı.

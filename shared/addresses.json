@@ -3,7 +3,8 @@
     "a": "0xc512afef2938406f158a095D0bfc31042b4ea7f1",
     "b": "0x526e4040446FDA5b8a56f879b9c0Eb12178b3e95",
     "c": "0xe4241A204e539CacFF1C82F652216c526D5cE0ac",
-    "fast": "0x3034C9ABf3bE07e9B3f6ec8f262288aBBbBB3861"
+    "fast": "0x3034C9ABf3bE07e9B3f6ec8f262288aBBbBB3861",
+    "guest": "0x77970291CfC0390b5Dc835d3266e35E64bd15396"
   },
   "chainId": 10143,
   "commitBlocks": 4,
