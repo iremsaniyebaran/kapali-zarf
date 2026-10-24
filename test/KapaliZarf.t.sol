@@ -231,7 +231,7 @@ contract KapaliZarfTest is Test {
         assertEq(a.refund, 85e18);
     }
 
-    function test_UnrevealedBidPenaltyGoesToBorrower() public {
+    function test_UnrevealedUnlocked() public {
         bytes32 id = _start();
         _commit(botA, id, 890e18);
         _commit(botB, id, 885e18); // never revealed
@@ -243,13 +243,27 @@ contract KapaliZarfTest is Test {
         uint256 elifBefore = usd.balanceOf(elif);
         kz.settle(id);
 
-        // Second price is C's 870; B forfeits 1% of the 900 cap = 9.
+        // B's sealed 885 never counts: the second price is C's 870. B loses nothing and is unlocked.
         KapaliZarf.Auction memory a = kz.getAuction(id);
         assertEq(a.price, 870e18);
-        assertEq(a.refund, 70e18 + 9e18);
-        assertEq(usd.balanceOf(elif) - elifBefore, 79e18);
-        assertEq(kz.balanceOf(botB), BOT_DEPOSIT - 9e18);
+        assertEq(a.refund, 70e18);
+        assertEq(usd.balanceOf(elif) - elifBefore, 70e18);
+        assertEq(kz.balanceOf(botB), BOT_DEPOSIT);
         assertEq(kz.lockedOf(botB), 0);
+        assertEq(kz.freeBalanceOf(botB), BOT_DEPOSIT);
+    }
+
+    function test_CommittedButNobodyRevealed_NoBidsAndUnlocked() public {
+        bytes32 id = _start();
+        _commit(botA, id, 890e18);
+        _commit(botB, id, 885e18);
+        _toSettle(id);
+        kz.settle(id);
+
+        assertEq(uint8(kz.phaseOf(id)), uint8(KapaliZarf.Phase.AwaitingFallback));
+        assertEq(kz.lockedOf(botA) + kz.lockedOf(botB), 0);
+        assertEq(kz.balanceOf(botA), BOT_DEPOSIT);
+        assertEq(kz.balanceOf(botB), BOT_DEPOSIT);
     }
 
     function testFuzz_WinnerPaysSecondHighest(uint256 bidA, uint256 bidB, uint256 bidC) public {

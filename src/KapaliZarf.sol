@@ -22,8 +22,6 @@ contract KapaliZarf is ReentrancyGuard {
     uint256 public constant BPS = 10_000;
     /// @notice Reserve = collateral value x 90%. Must match LendingPool.CLASSIC_DISCOUNT_BPS (10%).
     uint256 public constant RESERVE_BPS = 9_000;
-    /// @notice A committed bid that is never revealed forfeits 1% of the bid cap to the borrower.
-    uint256 public constant UNREVEALED_PENALTY_BPS = 100;
     /// @notice Bounds the loop in settle().
     uint256 public constant MAX_BIDDERS = 8;
 
@@ -99,7 +97,7 @@ contract KapaliZarf is ReentrancyGuard {
     event BidCommitted(bytes32 indexed id, address indexed bidder);
     event BidRevealed(bytes32 indexed id, address indexed bidder, uint256 amount);
     event AuctionSettled(bytes32 indexed id, address indexed winner, uint256 price, uint256 refund);
-    event NoBids(bytes32 indexed id, uint256 penalties);
+    event NoBids(bytes32 indexed id);
     event FallbackLiquidated(bytes32 indexed id, address indexed liquidator, uint256 price, uint256 refund);
 
     error ZeroAmount();
@@ -240,20 +238,19 @@ contract KapaliZarf is ReentrancyGuard {
         if (a.status != Status.Active) revert AuctionNotActive();
         if (block.number <= a.revealEnd) revert RevealNotOver();
 
-        uint256 penalties = _releaseLocks(id, a.bidCap);
+        // Every lock is released, unrevealed bids included. No penalty: settle must never revert.
+        _releaseLocks(id, a.bidCap);
 
         if (a.highBidder == address(0)) {
             a.status = Status.AwaitingFallback;
-            a.refund = penalties;
-            if (penalties > 0) usd.safeTransfer(a.borrower, penalties);
-            emit NoBids(id, penalties);
+            emit NoBids(id);
             return;
         }
 
         address winner = a.highBidder;
         uint256 price = a.secondBid > a.reservePrice ? a.secondBid : a.reservePrice;
         uint256 repaid = price < a.debt ? price : a.debt;
-        uint256 refund = price - repaid + penalties;
+        uint256 refund = price - repaid;
 
         balanceOf[winner] -= price;
         a.status = Status.Settled;
@@ -281,7 +278,7 @@ contract KapaliZarf is ReentrancyGuard {
         a.status = Status.FallbackLiquidated;
         a.winner = msg.sender;
         a.price = price;
-        a.refund += refund;
+        a.refund = refund;
         emit FallbackLiquidated(id, msg.sender, price, refund);
 
         if (freeBalanceOf(msg.sender) >= price) {
@@ -339,16 +336,10 @@ contract KapaliZarf is ReentrancyGuard {
     // Internal
     // ---------------------------------------------------------------------
 
-    function _releaseLocks(bytes32 id, uint256 bidCap) private returns (uint256 penalties) {
+    function _releaseLocks(bytes32 id, uint256 bidCap) private {
         address[] storage list = _bidders[id];
-        uint256 penalty = bidCap * UNREVEALED_PENALTY_BPS / BPS;
         for (uint256 i; i < list.length; ++i) {
-            address bidder = list[i];
-            lockedOf[bidder] -= bidCap;
-            if (!bids[id][bidder].revealed) {
-                balanceOf[bidder] -= penalty;
-                penalties += penalty;
-            }
+            lockedOf[list[i]] -= bidCap;
         }
     }
 }
