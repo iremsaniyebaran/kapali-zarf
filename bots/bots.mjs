@@ -31,11 +31,15 @@ import { startFeed } from "./ws.mjs";
 import { startDropServer } from "./drop-server.mjs";
 import { reset } from "./reset.mjs";
 
+// Strategies can be changed from the stage page (POST /config); they apply from the next auction.
 const BIDDERS = [
-  { role: "botA", label: "Bot A", marginBps: 111n },
-  { role: "botB", label: "Bot B", marginBps: 166n },
-  { role: "botC", label: "Bot C", marginBps: 333n },
+  { role: "botA", label: "Bot A", marginBps: 111n, enabled: true },
+  { role: "botB", label: "Bot B", marginBps: 166n, enabled: true },
+  { role: "botC", label: "Bot C", marginBps: 333n, enabled: true },
 ];
+const MAX_MARGIN_BPS = 1_000n; // the reserve is 90% of the value: a wider margin could never bid
+// The presenter's own sealed bid (POST /bid). Armed before the drop, committed with the bots, one shot.
+const guest = { role: "guest", label: "Sen", amount: null };
 const ONE = parseUnits("1", 18);
 const ACTIVE = 1; // KapaliZarf.Status.Active
 const LIQ_THRESHOLD_BPS = 8_500n; // LendingPool.LIQ_THRESHOLD_BPS
@@ -51,6 +55,7 @@ const labels = {
   [addr.botB]: "Bot B",
   [addr.botC]: "Bot C",
   [addr.fastBot]: "Hızlı Bot",
+  [addr.guest]: "Sen",
   [addr.owner]: "Owner",
   [addr.elifKlasik]: "ElifKlasik",
   [addr.elifZarf]: "ElifZarf",
@@ -64,7 +69,7 @@ setInterval(async () => {
 }, 10_000);
 
 const senders = {};
-for (const role of ["owner", "fastBot", "botA", "botB", "botC"]) senders[role] = await createSender(ctx, role, fees);
+for (const role of ["owner", "fastBot", "botA", "botB", "botC", "guest"]) senders[role] = await createSender(ctx, role, fees);
 await checkHashEncoding();
 fs.mkdirSync(STATE_DIR, { recursive: true });
 
@@ -77,6 +82,7 @@ const inflight = new Map(); // txHash -> { what, head, t }
 const t0ByAuction = new Map(); // auction id -> ms, for the elapsed time in the log
 let classicT0 = 0;
 let auctionT0 = 0;
+let current = null; // { id, auction, secrets } of the auction being bid on
 
 const feed = startFeed({
   wsUrl: WS_URL,
@@ -89,9 +95,34 @@ const feed = startFeed({
 log(`Botlar çalışıyor. Zincir ${ctx.chainId}, KapaliZarf ${c.kz.address}, pencereler ${ctx.deployment.commitBlocks}/${ctx.deployment.revealBlocks} blok`);
 log(`ElifKlasik ${addr.elifKlasik} | ElifZarf ${addr.elifZarf} | ETH ${fmt(price)}`);
 
+const config = () => ({
+  bidders: BIDDERS.map((b) => ({ role: b.role, label: b.label, marginBps: Number(b.marginBps), enabled: b.enabled })),
+  guest: { address: addr.guest, amount: guest.amount === null ? null : Number(guest.amount / ONE) },
+});
+
 startDropServer({
   port: DROP_PORT,
-  health: async () => ({ ok: true, chainId: ctx.chainId, head: feed.lastHead(), price: price.toString(), paused }),
+  health: async () => ({ ok: true, chainId: ctx.chainId, head: feed.lastHead(), price: price.toString(), paused, ...config() }),
+  config: async ({ bidders = [] }) => {
+    for (const next of bidders) {
+      const bot = BIDDERS.find((b) => b.role === next.role);
+      if (!bot) continue;
+      if (next.marginBps !== undefined) {
+        const bps = BigInt(Math.round(Number(next.marginBps)));
+        bot.marginBps = bps < 0n ? 0n : bps > MAX_MARGIN_BPS ? MAX_MARGIN_BPS : bps;
+      }
+      if (next.enabled !== undefined) bot.enabled = Boolean(next.enabled);
+    }
+    log(`Strateji: ${BIDDERS.map((b) => `${b.label} ${b.enabled ? `%${(Number(b.marginBps) / 100).toFixed(2)}` : "kapalı"}`).join(", ")}`);
+    return { ok: true, ...config() };
+  },
+  bid: async ({ amount }) => {
+    guest.amount = amount === null || amount === undefined || amount === "" ? null : parseUnits(String(amount), 18);
+    log(guest.amount === null ? "Sen: teklif geri çekildi" : `Sen: ${fmt(guest.amount)} mühürlenmeye hazır`);
+    // Still inside a commit window: seal it right away.
+    if (guest.amount !== null && current && feed.lastHead() < current.auction.commitEnd) commitGuest(current);
+    return { ok: true, ...config() };
+  },
   drop: async ({ price: p }) => {
     const next = p ? parseUnits(String(p), 18) : DROP_PRICE;
     const hash = await track(senders.owner, c.oracle, "setPrice", [next], `Owner: ETH → ${fmt(next)}`);
@@ -224,9 +255,10 @@ async function joinAuction(id, auction, { restoring = false } = {}) {
   t0ByAuction.set(id, auctionT0 || Date.now());
   auctionT0 = 0;
   const secrets = loadSecrets(id);
+  current = { id, auction, secrets };
 
   for (const bot of BIDDERS) {
-    if (secrets[bot.role]) continue;
+    if (secrets[bot.role] || !bot.enabled) continue;
     if (restoring && feed.lastHead() >= auction.commitEnd) continue;
     const amount = ((auction.bidCap * (10_000n - bot.marginBps)) / 10_000n / ONE) * ONE;
     if (amount < auction.reservePrice) {
@@ -238,17 +270,33 @@ async function joinAuction(id, auction, { restoring = false } = {}) {
     saveSecrets(id, secrets); // before sending: a crash must never lose a committed salt
     track(senders[bot.role], c.kz, "commit", [id, hashBid(id, amount, salt, addr[bot.role])], `${bot.label}: commit`);
   }
+  if (!restoring) commitGuest(current);
 
+  // Reads `secrets` when it runs, so a guest bid sealed later in the window is revealed too.
   jobs.push({
     at: auction.commitEnd,
     run: () => {
-      for (const bot of BIDDERS) {
-        const s = secrets[bot.role];
-        if (s) track(senders[bot.role], c.kz, "reveal", [id, BigInt(s.amount), s.salt], `${bot.label}: reveal ${fmt(BigInt(s.amount))}`);
+      for (const [role, s] of Object.entries(secrets)) {
+        track(senders[role], c.kz, "reveal", [id, BigInt(s.amount), s.salt], `${label(addr[role])}: reveal ${fmt(BigInt(s.amount))}`);
       }
     },
   });
   jobs.push({ at: auction.revealEnd, run: () => track(senders.botC, c.kz, "settle", [id], "Bot C: settle") });
+}
+
+/// Seals the presenter's armed bid into `auction`, once. An amount outside [reserve, cap] would revert
+/// at reveal, so it is refused here and stays armed for the next round.
+function commitGuest({ id, auction, secrets }) {
+  if (guest.amount === null || secrets.guest) return;
+  if (guest.amount < auction.reservePrice || guest.amount > auction.bidCap) {
+    log(`Sen: ${fmt(guest.amount)} bu açık artırmanın aralığı dışında (${fmt(auction.reservePrice)}–${fmt(auction.bidCap)}), katılmıyor`);
+    return;
+  }
+  const salt = `0x${randomBytes(32).toString("hex")}`;
+  secrets.guest = { amount: guest.amount.toString(), salt };
+  saveSecrets(id, secrets);
+  track(senders.guest, c.kz, "commit", [id, hashBid(id, guest.amount, salt, addr.guest)], "Sen: commit");
+  guest.amount = null;
 }
 
 /// After a restart: joins ElifZarf's open auction, revealing with the salts saved on disk.

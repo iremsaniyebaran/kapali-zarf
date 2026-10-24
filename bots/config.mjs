@@ -55,6 +55,7 @@ export const ROLES = {
   botB: "BOT_B_PK",
   botC: "BOT_C_PK",
   fastBot: "FAST_BOT_PK",
+  guest: "GUEST_PK",
 };
 
 // Context key -> [contract name, key in shared/addresses.json]

@@ -3,6 +3,8 @@
 //   GET  /health  -> { ok, chainId, head, busy }
 //   POST /drop    -> owner sets the ETH price (body { "price": 900 } optional)
 //   POST /reset   -> runs the reset; bots pause while it runs
+//   POST /config  -> bot strategies { bidders: [{ role, marginBps, enabled }] }
+//   POST /bid     -> the presenter's sealed bid { amount } (null withdraws it)
 import http from "node:http";
 import { log } from "./config.mjs";
 
@@ -14,7 +16,7 @@ const CORS = {
   "Access-Control-Allow-Private-Network": "true",
 };
 
-export function startDropServer({ port, health, drop, reset }) {
+export function startDropServer({ port, health, drop, reset, config, bid }) {
   const server = http.createServer(async (req, res) => {
     const reply = (status, body) => {
       res.writeHead(status, { ...CORS, "Content-Type": "application/json" });
@@ -26,6 +28,8 @@ export function startDropServer({ port, health, drop, reset }) {
       if (req.method === "GET" && req.url === "/health") return reply(200, await health());
       if (req.method === "POST" && req.url === "/drop") return reply(200, await drop(await body(req)));
       if (req.method === "POST" && req.url === "/reset") return reply(200, await reset());
+      if (req.method === "POST" && req.url === "/config") return reply(200, await config(await body(req)));
+      if (req.method === "POST" && req.url === "/bid") return reply(200, await bid(await body(req)));
       return reply(404, { ok: false, error: "not found" });
     } catch (err) {
       log(`drop-server ${req.url}:`, err.shortMessage ?? err.message);

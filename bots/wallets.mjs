@@ -1,4 +1,5 @@
-// Creates the six demo wallets (two Elifs, four bots) and appends their keys to .env.
+// Creates the seven demo wallets (two Elifs, four bots, the presenter's own bidder "Sen") and
+// appends their keys to .env.
 // Existing keys are never overwritten. DEPLOYER_PK is yours: a wallet funded from the Monad faucet.
 import fs from "node:fs";
 import path from "node:path";
@@ -16,6 +17,7 @@ const ROLES = [
   ["BOT_B_PK", "Bot B"],
   ["BOT_C_PK", "Bot C"],
   ["FAST_BOT_PK", "Hızlı Bot"],
+  ["GUEST_PK", "Sen"],
 ];
 
 const lines = [];

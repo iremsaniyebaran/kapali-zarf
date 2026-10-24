@@ -127,6 +127,7 @@ export async function reset(ctx, { quiet = false } = {}) {
   await Promise.all([
     fundAuctionBot("botA"),
     fundAuctionBot("botB"),
+    fundAuctionBot("guest"),
     fundAuctionBot("botC").then(finishOpenAuction),
     fundFastBot(),
   ]);
@@ -153,7 +154,7 @@ async function printSummary(ctx, quiet) {
       açıkArtırmada: inAuction,
     };
   }
-  for (const role of ["botA", "botB", "botC"]) {
+  for (const role of ["botA", "botB", "botC", "guest"]) {
     const balance = await read(ctx, c.kz, "freeBalanceOf", [addr[role]]);
     rows[role] = { adres: addr[role], serbestBakiye: fmt(balance) };
   }
@@ -175,7 +176,7 @@ function writeRoles(ctx) {
     owner: addr.owner,
     elifKlasik: addr.elifKlasik,
     elifZarf: addr.elifZarf,
-    bots: { a: addr.botA, b: addr.botB, c: addr.botC, fast: addr.fastBot },
+    bots: { a: addr.botA, b: addr.botB, c: addr.botC, fast: addr.fastBot, guest: addr.guest },
   };
   if (JSON.stringify(next) === JSON.stringify(data)) return;
   fs.writeFileSync(file, `${JSON.stringify(next, null, 2)}\n`);
