@@ -7,6 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {MockOracle} from "./MockOracle.sol";
 import {KapaliZarf} from "./KapaliZarf.sol";
+import {Split} from "./Split.sol";
 
 /// @title LendingPool
 /// @notice Minimal demo lending market: mWETH collateral, mUSD debt. A liquidatable position can be
@@ -33,12 +34,14 @@ contract LendingPool is Ownable, ReentrancyGuard {
     KapaliZarf public kapaliZarf;
 
     mapping(address => Position) public positions;
+    /// @notice Debt left unpaid when a liquidation price falls short of the debt.
+    uint256 public badDebt;
 
     event KapaliZarfSet(address kapaliZarf);
     event CollateralDeposited(address indexed user, uint256 amount);
     event Borrowed(address indexed user, uint256 amount);
     event ClassicLiquidated(
-        address indexed borrower, address indexed liquidator, uint256 collateral, uint256 price, uint256 refund
+        address indexed borrower, address indexed liquidator, uint256 price, uint256 debtRepaid, uint256 refund
     );
     event LiquidationAuctionStarted(address indexed borrower, bytes32 indexed auctionId);
     event RepaidFromAuction(address indexed borrower, uint256 amount);
@@ -48,6 +51,7 @@ contract LendingPool is Ownable, ReentrancyGuard {
     error Unhealthy();
     error NotLiquidatable();
     error OnlyKapaliZarf();
+    error NotInAuction();
     error KapaliZarfAlreadySet();
     error KapaliZarfNotSet();
 
@@ -96,10 +100,11 @@ contract LendingPool is Ownable, ReentrancyGuard {
         if (!isLiquidatable(borrower)) revert NotLiquidatable();
         Position memory pos = positions[borrower];
         uint256 price = classicPrice(borrower);
-        refund = price > pos.debt ? price - pos.debt : 0;
+        uint256 repaid;
+        (repaid, refund) = Split.split(price, pos.debt);
 
-        delete positions[borrower];
-        emit ClassicLiquidated(borrower, msg.sender, pos.collateral, price, refund);
+        _close(borrower, pos.debt - repaid);
+        emit ClassicLiquidated(borrower, msg.sender, price, repaid, refund);
 
         usd.safeTransferFrom(msg.sender, address(this), price);
         if (refund > 0) usd.safeTransfer(borrower, refund);
@@ -129,9 +134,14 @@ contract LendingPool is Ownable, ReentrancyGuard {
     function repayFromAuction(address borrower, uint256 amount) external {
         if (msg.sender != address(kapaliZarf)) revert OnlyKapaliZarf();
         Position storage pos = positions[borrower];
-        pos.debt = 0;
-        pos.inAuction = false;
+        if (!pos.inAuction) revert NotInAuction();
+        _close(borrower, pos.debt - amount);
         emit RepaidFromAuction(borrower, amount);
+    }
+
+    function _close(address borrower, uint256 shortfall) internal {
+        delete positions[borrower];
+        badDebt += shortfall;
     }
 
     // ---------------------------------------------------------------------

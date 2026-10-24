@@ -8,19 +8,19 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 contract MockOracle is Ownable {
     uint256 public price;
 
-    event PriceUpdated(uint256 oldPrice, uint256 newPrice);
+    event PriceUpdated(uint256 price);
 
     error ZeroPrice();
 
     constructor(uint256 initialPrice) Ownable(msg.sender) {
         if (initialPrice == 0) revert ZeroPrice();
         price = initialPrice;
-        emit PriceUpdated(0, initialPrice);
+        emit PriceUpdated(initialPrice);
     }
 
     function setPrice(uint256 newPrice) external onlyOwner {
         if (newPrice == 0) revert ZeroPrice();
-        emit PriceUpdated(price, newPrice);
         price = newPrice;
+        emit PriceUpdated(newPrice);
     }
 }

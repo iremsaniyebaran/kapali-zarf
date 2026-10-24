@@ -30,6 +30,9 @@ contract KapaliZarfTest is Test {
     uint256 internal constant BOT_DEPOSIT = 5_000e18;
 
     event AuctionSettled(bytes32 indexed id, address indexed winner, uint256 price, uint256 refund);
+    event ClassicLiquidated(
+        address indexed borrower, address indexed liquidator, uint256 price, uint256 debtRepaid, uint256 refund
+    );
 
     function setUp() public {
         usd = new MockUSD();
@@ -111,15 +114,33 @@ contract KapaliZarfTest is Test {
         uint256 elifBefore = usd.balanceOf(elif);
         uint256 botBefore = usd.balanceOf(fastBot);
 
+        vm.expectEmit(true, true, false, true, address(pool));
+        emit ClassicLiquidated(elif, fastBot, 810e18, DEBT, 10e18);
         vm.prank(fastBot);
         uint256 refund = pool.liquidateClassic(elif);
 
         assertEq(refund, 10e18);
+        assertEq(pool.badDebt(), 0);
         assertEq(usd.balanceOf(elif) - elifBefore, 10e18);
         assertEq(botBefore - usd.balanceOf(fastBot), 810e18);
         assertEq(weth.balanceOf(fastBot), COLLATERAL);
         (uint256 collateral, uint256 debt,,,) = pool.positionOf(elif);
         assertEq(collateral, 0);
+        assertEq(debt, 0);
+    }
+
+    /// @notice A deeper crash: the classic price (765) no longer covers the debt (800).
+    function test_ClassicBelowDebt_RecordsBadDebt() public {
+        oracle.setPrice(850e18);
+        uint256 elifBefore = usd.balanceOf(elif);
+
+        vm.prank(fastBot);
+        uint256 refund = pool.liquidateClassic(elif);
+
+        assertEq(refund, 0);
+        assertEq(usd.balanceOf(elif), elifBefore);
+        assertEq(pool.badDebt(), 35e18);
+        (, uint256 debt,,,) = pool.positionOf(elif);
         assertEq(debt, 0);
     }
 
