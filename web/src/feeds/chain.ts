@@ -9,12 +9,24 @@ const FALLBACK_KIND: Record<string, string> = { monadLogs: 'logs', monadNewHeads
 /** On load, recent logs are replayed so a reload in the middle of the demo loses nothing. */
 const RESTORE_BLOCKS = 300n
 const LOG_RANGE = 100n
+/** The frozen events the page plays; the contracts emit others (Borrowed, Deposited, …). */
+const STAGE_EVENTS = new Set([
+  'PriceUpdated',
+  'ClassicLiquidated',
+  'AuctionStarted',
+  'BidCommitted',
+  'BidRevealed',
+  'AuctionSettled',
+  'NoBids',
+  'FallbackLiquidated',
+])
 
 type RawLog = Pick<Log, 'data' | 'topics'> & { blockNumber: bigint | string | null; transactionHash: Hash | null; logIndex: number | string | null }
 
 export function toEvent(raw: RawLog): ChainEvent | undefined {
   try {
     const ev = decodeEventLog({ abi: ABI, data: raw.data, topics: raw.topics as [Hash, ...Hash[]] })
+    if (!ev.eventName || !STAGE_EVENTS.has(ev.eventName)) return undefined
     return {
       type: ev.eventName,
       block: BigInt(raw.blockNumber ?? 0),

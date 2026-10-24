@@ -147,6 +147,8 @@ export function reduce(s: StageState, e: StageEvent): StageState {
     }
     case 'NoBids':
       return s.auction?.id === e.id ? { ...s, auction: { ...s.auction, noBids: true } } : s
+    default:
+      return s
     case 'FallbackLiquidated': {
       const a = s.auction
       if (!a || a.id !== e.id) return s

@@ -6,13 +6,14 @@ import { num, usd } from '../format'
 interface Props {
   title: string
   position: Position & { refund?: bigint }
-  /** Last price at which the position was still open, so a closed card keeps its numbers. */
+  /** Current ETH price. */
   price: bigint
   showRefund: boolean
 }
 
 export const PositionCard = forwardRef<HTMLDivElement, Props>(function PositionCard({ title, position, price, showRefund }, refundRef) {
   const closed = position.refund !== undefined
+  const empty = !closed && position.debt === 0n
   const hf = healthOf(position, price)
   const healthy = hf >= 1
   // Gauge: 0.8 at the left edge, 1.2 at the right, the threshold 1.0 in the middle.
@@ -22,7 +23,7 @@ export const PositionCard = forwardRef<HTMLDivElement, Props>(function PositionC
     <div className={`position ${closed ? 'position-closed' : healthy ? 'position-ok' : 'position-bad'}`}>
       <div className="position-head">
         <span className="position-title">{title}</span>
-        <span className="position-tag">{closed ? 'likide edildi' : healthy ? 'sağlıklı' : 'likide edilebilir'}</span>
+        <span className="position-tag">{closed ? 'likide edildi' : empty ? 'pozisyon yok' : healthy ? 'sağlıklı' : 'likide edilebilir'}</span>
       </div>
 
       {!closed ? (

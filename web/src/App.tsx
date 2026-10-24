@@ -85,7 +85,6 @@ export default function App() {
           ? `canlı · blok ${state.head.toString()}`
           : 'zincire bağlanıyor…'
 
-  // Value of the cards at the moment of the drop, so a closed card's numbers stay put.
   const price = state.price
 
   return (
