@@ -1,0 +1,629 @@
+/* Landing page: same tokens as the stage, laid out as a scrolling page. */
+
+a.brand {
+  color: inherit;
+  text-decoration: none;
+}
+
+.landing {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px 40px;
+}
+
+.l-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  background: linear-gradient(var(--bg) 70%, transparent);
+}
+
+.l-nav .brand-name {
+  font-size: 22px;
+}
+
+.l-nav nav {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.l-nav nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.l-nav nav a:hover {
+  color: var(--text);
+}
+
+.l-nav nav a.l-nav-cta {
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ff6b6b, #d93838);
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  align-items: center;
+  gap: 48px;
+  min-height: calc(100vh - 80px);
+  padding: 40px 0 60px;
+}
+
+.l-pill {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 124, 255, 0.5);
+  background: rgba(140, 124, 255, 0.12);
+  color: #c9c1ff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.hero h1 {
+  margin: 18px 0 16px;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  font-weight: 900;
+}
+
+.hl {
+  background: linear-gradient(90deg, var(--good), var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-lead {
+  margin: 0 0 28px;
+  max-width: 600px;
+  font-size: clamp(17px, 1.5vw, 20px);
+  line-height: 1.55;
+  color: #c3ccd8;
+}
+
+.hero-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.btn-primary,
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  padding: 14px 22px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 17px;
+  text-decoration: none;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(180deg, #ff6b6b, #d93838);
+  box-shadow: 0 10px 30px rgba(217, 56, 56, 0.35);
+}
+
+.btn-ghost {
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.btn-primary:hover,
+.btn-ghost:hover {
+  transform: translateY(-2px);
+}
+
+.btn-ghost:hover {
+  border-color: var(--muted);
+}
+
+.hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin: 36px 0 8px;
+}
+
+.hero-stats dt {
+  color: var(--muted);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.hero-stats dd {
+  margin: 4px 0 0;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.hero-footnote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.hero-envelopes {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  perspective: 900px;
+}
+
+.hero-env {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: min(30%, 170px);
+}
+
+.hero-env-who {
+  font-weight: 800;
+}
+
+.hero-env-face {
+  width: 100%;
+  aspect-ratio: 1.55;
+  perspective: 800px;
+}
+
+.hero-env-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+
+.hero-env-front,
+.hero-env-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.hero-env-front {
+  background: linear-gradient(to bottom right, transparent 49.5%, var(--paper-edge) 50%, transparent 51%) left top / 50% 65% no-repeat,
+    linear-gradient(to bottom left, transparent 49.5%, var(--paper-edge) 50%, transparent 51%) right top / 50% 65% no-repeat, var(--paper);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.hero-env-wax {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 26%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #d8453b, var(--wax) 60%, #7d1712);
+  transform: translate(-50%, -50%);
+}
+
+.hero-env-back {
+  transform: rotateY(180deg);
+  display: grid;
+  place-items: center;
+  background: #fffaf0;
+  color: #1b1f27;
+  font-size: clamp(20px, 2.4vw, 30px);
+  font-weight: 900;
+}
+
+.hero-env.win .hero-env-back {
+  outline: 4px solid var(--good);
+  outline-offset: 3px;
+}
+
+.hero-env-note {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.hero-env.win .hero-env-note {
+  color: var(--good);
+  font-weight: 800;
+}
+
+/* ---------- Sections ---------- */
+
+.l-section {
+  padding: 72px 0 24px;
+  border-top: 1px solid var(--line);
+}
+
+.l-kicker {
+  color: var(--gold);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.l-h2 {
+  margin: 8px 0 18px;
+  font-size: clamp(28px, 3.4vw, 44px);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+.l-lead {
+  max-width: 760px;
+  margin: 0 0 28px;
+  font-size: 18px;
+  line-height: 1.55;
+  color: #c3ccd8;
+}
+
+.l-note {
+  max-width: 820px;
+  margin: 24px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.compare-card {
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.bad-card {
+  border-top: 4px solid var(--bad);
+}
+
+.good-card {
+  border-top: 4px solid var(--good);
+}
+
+.compare-tag {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.compare-card ol {
+  margin: 16px 0;
+  padding-left: 20px;
+  line-height: 1.7;
+  font-size: 16px;
+}
+
+.compare-num {
+  font-size: clamp(48px, 6vw, 76px);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.compare-card p {
+  margin: 10px 0 0;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.step {
+  padding: 22px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.step-n {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--wax);
+  color: #fff;
+  font-weight: 900;
+}
+
+.step h3 {
+  margin: 14px 0 8px;
+  font-size: 22px;
+}
+
+.step p {
+  margin: 0;
+  color: #c3ccd8;
+  line-height: 1.55;
+}
+
+/* ---------- Try it ---------- */
+
+.try {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 24px;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.try-bids {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.try-bid {
+  display: grid;
+  grid-template-columns: 70px 1fr 74px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.try-bid.is-winner {
+  border-color: var(--good);
+}
+
+.try-bid.is-second {
+  border-color: rgba(242, 193, 78, 0.6);
+}
+
+.try-name {
+  font-weight: 800;
+}
+
+.try-amount {
+  text-align: right;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.try-seal {
+  justify-self: start;
+  font: inherit;
+  font-weight: 800;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  background: radial-gradient(circle at 35% 35%, #d8453b, var(--wax) 65%);
+  cursor: pointer;
+}
+
+.try-result {
+  display: grid;
+  align-content: center;
+  padding: 8px 4px;
+}
+
+.try-lines {
+  display: grid;
+  gap: 10px;
+  font-size: 18px;
+}
+
+.try-compare {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.try-compare {
+  flex-wrap: wrap;
+}
+
+.try-compare strong {
+  font-size: 28px;
+  white-space: nowrap;
+}
+
+.try-diff {
+  justify-self: start;
+  margin-top: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--good);
+  color: #062417;
+  font-weight: 900;
+  font-size: 22px;
+}
+
+.try-sealed {
+  margin: 0;
+  color: #c3ccd8;
+  line-height: 1.6;
+}
+
+/* ---------- Why Monad, wins, contracts ---------- */
+
+.why {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.why-card {
+  padding: 22px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.why-num {
+  font-size: 40px;
+  font-weight: 900;
+  color: var(--gold);
+  letter-spacing: -0.02em;
+}
+
+.why-card p {
+  margin: 8px 0 0;
+  color: #c3ccd8;
+  line-height: 1.55;
+}
+
+.why-card code,
+.contract code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.wins {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+.wins h3 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.wins p {
+  margin: 0;
+  color: #c3ccd8;
+  line-height: 1.55;
+}
+
+.contracts {
+  display: grid;
+  gap: 8px;
+}
+
+.contract {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  gap: 16px;
+  align-items: baseline;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+
+.contract:hover {
+  border-color: var(--muted);
+}
+
+.contract-name {
+  font-weight: 800;
+}
+
+.contract-what {
+  color: var(--muted);
+}
+
+.contract code {
+  color: var(--muted);
+}
+
+.l-final {
+  margin: 72px 0 0;
+  padding: 48px 32px;
+  border-radius: 24px;
+  text-align: center;
+  background: radial-gradient(800px 300px at 50% 0%, rgba(61, 220, 151, 0.12), transparent 70%), var(--panel);
+  border: 1px solid var(--line);
+}
+
+.l-final h2 {
+  margin: 0 0 10px;
+  font-size: clamp(26px, 3vw, 40px);
+  letter-spacing: -0.02em;
+}
+
+.l-final p {
+  margin: 0 0 24px;
+  color: #c3ccd8;
+}
+
+.l-final .hero-ctas {
+  justify-content: center;
+}
+
+.l-footer {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 900px) {
+  .landing {
+    padding: 0 16px 32px;
+  }
+
+  .l-nav nav a:not(.l-nav-cta) {
+    display: none;
+  }
+
+  .hero,
+  .compare,
+  .steps,
+  .try,
+  .why,
+  .wins {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    min-height: 0;
+    gap: 36px;
+    padding-top: 16px;
+  }
+
+  .hero-stats {
+    gap: 20px;
+  }
+
+  .contract {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .try-bid {
+    grid-template-columns: 56px 1fr 64px;
+    gap: 10px;
+  }
+}

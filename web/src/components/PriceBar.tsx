@@ -18,13 +18,13 @@ export function PriceBar({ price, from, dropPct, canDrop, dropping, mode, status
   const fell = from !== undefined && price < from
   return (
     <header className="price-bar">
-      <div className="brand">
+      <a className="brand" href="/" title="Tanıtım sayfası">
         <span className="brand-mark" aria-hidden />
         <div>
           <div className="brand-name">Kapalı Zarf</div>
           <div className="brand-sub">Likidasyonda en hızlı bot değil, en iyi teklif kazanır</div>
         </div>
-      </div>
+      </a>
 
       <div className={`price ${fell ? 'price-down' : ''}`}>
         <span className="price-label">ETH</span>

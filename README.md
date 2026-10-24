@@ -112,9 +112,12 @@ npm run web          # http://localhost:5173
 
 | Adres | Ne |
 | --- | --- |
-| `/` | Canlı mod: `shared/addresses.json`, `monadLogs` ile gerçek event'ler |
-| `/?mock=1` | Kayıt modu: aynı reducer'ı zamanlanmış event'lerle oynatır (geliştirme ve son yedek) |
-| `/?chain=31337` | Anvil'e karşı canlı mod |
+| `/` | Tanıtım sayfası: sorun, nasıl çalışır, Vickrey'i deneme aracı, neden Monad, testnet kontratları |
+| `/demo` | Sahne, canlı mod: `shared/addresses.json`, `monadLogs` ile gerçek event'ler |
+| `/demo?mock=1` | Kayıt modu: aynı reducer'ı zamanlanmış event'lerle oynatır (geliştirme ve son yedek) |
+| `/demo?chain=31337` | Anvil'e karşı canlı mod |
+
+Eski `/?mock=1` ve `/?chain=31337` adresleri de sahneyi açar. Sahnede logoya tıklamak tanıtım sayfasına döner.
 
 `web/.env.local` ile: `VITE_RPC_URL`, `VITE_WSS_URL` (botlardan farklı bir uç), `VITE_DROP_URL`
 (varsayılan `http://localhost:8787`), `VITE_EXPLORER_TX_URL`, `VITE_CHAIN_ID`, `VITE_BLOCK_SECONDS`.
@@ -139,7 +142,7 @@ Tuşlar: `Boşluk` fiyat düşüşü, `R` reset, `P` panel, `Esc` tekrardan çı
 `recorded.json` olarak indirir. Bu dosya `web/src/feeds/recorded.json` olarak kaydedilirse `?mock=1`
 varsayılan senaryoda gerçek provanın birebir kopyasını oynatır.
 
-Vercel: proje kökü `web/`, build `npm run build`, çıktı `dist`. Yine de sahnede sayfayı yerelden açın;
+Vercel: proje kökü `web/`, build `npm run build`, çıktı `dist`; `web/vercel.json` `/demo`'yu da `index.html`'e yönlendirir. Yine de sahnede sayfayı yerelden açın;
 HTTPS sayfanın `localhost`'a erişmesi tarayıcı ayarına bağlı.
 
 ## Donan event imzaları
